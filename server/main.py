@@ -11,7 +11,7 @@ from telegram import Update
 
 from .bot import build_application, notify_admins_about_application
 from .config import Config, get_config
-from .db import create_pool, get_user_application, init_db, submit_application, upsert_user
+from .db import create_pool, get_application, get_user_application, init_db, submit_application, upsert_user
 from .security import validate_webapp_init_data
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -118,6 +118,7 @@ async def api_submit_application(request: Request):
             raise HTTPException(status_code=409, detail="application already accepted") from exc
         raise HTTPException(status_code=400, detail=detail) from exc
 
+    full_row = await get_application(pool, int(row["id"]))
     telegram_app = request.app.state.telegram_app
-    await notify_admins_about_application(telegram_app.bot, config, row)
+    await notify_admins_about_application(telegram_app.bot, config, full_row or row)
     return {"ok": True, "application": dict(row)}
