@@ -43,8 +43,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
-        if config.public_base_url:
-            await telegram_app.bot.delete_webhook(drop_pending_updates=False)
+        # Do not delete webhook on shutdown. Render can stop/restart services,
+        # and Telegram must keep the webhook URL so new updates can wake the service.
         await telegram_app.stop()
         await telegram_app.shutdown()
         await pool.close()
