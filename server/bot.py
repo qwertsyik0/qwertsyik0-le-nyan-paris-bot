@@ -19,24 +19,31 @@ def is_admin(config: Config, user_id: int | None) -> bool:
     return bool(user_id and user_id in config.admin_ids)
 
 
+def value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
 def application_summary(row: Any) -> str:
-    username = row.get("username") if hasattr(row, "get") else row["username"] if "username" in row else None
+    username = value(row, "username")
     username_line = f"@{username}" if username and not str(username).startswith("@") else (username or "без username")
-    full_name = f"{row['character_first_name']} {row['character_last_name']}"
+    full_name = f"{value(row, 'character_first_name', '')} {value(row, 'character_last_name', '')}".strip()
     return (
         "📋 <b>анкета Le Nyan Paris</b>\n\n"
-        f"<b>ID:</b> {row['id']}\n"
+        f"<b>ID:</b> {value(row, 'id')}\n"
         f"<b>игрок:</b> {escape(str(username_line))}\n"
         f"<b>персонаж:</b> {escape(full_name)}\n"
-        f"<b>возраст:</b> {row['character_age']}\n"
-        f"<b>пол:</b> {escape(row['character_gender'])}\n"
-        f"<b>ориентация:</b> {escape(row['character_orientation'])}\n"
-        f"<b>желаемая роль:</b> {escape(row['role_preference'])}\n"
-        f"<b>раздел:</b> {escape(row['affiliation'])}\n\n"
-        f"<b>описание:</b>\n{escape(row['character_description'])}\n\n"
-        f"<b>характер:</b>\n{escape(row['character_personality'])}\n\n"
-        f"<b>опыт:</b>\n{escape(row['roleplay_experience'])}\n\n"
-        f"<b>комментарий:</b>\n{escape(row['applicant_comment'] or '—')}"
+        f"<b>возраст:</b> {value(row, 'character_age')}\n"
+        f"<b>пол:</b> {escape(str(value(row, 'character_gender', '')))}\n"
+        f"<b>ориентация:</b> {escape(str(value(row, 'character_orientation', '')))}\n"
+        f"<b>желаемая роль:</b> {escape(str(value(row, 'role_preference', '')))}\n"
+        f"<b>раздел:</b> {escape(str(value(row, 'affiliation', '')))}\n\n"
+        f"<b>описание:</b>\n{escape(str(value(row, 'character_description', '')))}\n\n"
+        f"<b>характер:</b>\n{escape(str(value(row, 'character_personality', '')))}\n\n"
+        f"<b>опыт:</b>\n{escape(str(value(row, 'roleplay_experience', '')))}\n\n"
+        f"<b>комментарий:</b>\n{escape(str(value(row, 'applicant_comment', '') or '—'))}"
     )
 
 
@@ -211,7 +218,7 @@ async def admin_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             chat_id=decided["telegram_id"],
             text=(
                 "📜 от императорской канцелярии\n\n"
-                f"многоуважаемый участник, ваша анкета одобрена.\n\n"
+                "многоуважаемый участник, ваша анкета одобрена.\n\n"
                 f"назначенная роль:\n{text}\n\n"
                 "вы приняты в Le Nyan Paris."
             ),
