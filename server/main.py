@@ -9,7 +9,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from telegram import Update
 
-from .bot import build_application, notify_admins_about_application
+from .bot import build_application, notify_admins_about_application, set_bot_commands
 from .config import Config, get_config
 from .db import create_pool, get_application, get_user_application, init_db, submit_application, upsert_user
 from .security import validate_webapp_init_data
@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
 
     telegram_app = build_application(config, pool)
     await telegram_app.initialize()
+    await set_bot_commands(telegram_app)
     await telegram_app.start()
 
     if config.public_base_url:
