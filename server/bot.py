@@ -26,6 +26,16 @@ def value(row: Any, key: str, default: Any = None) -> Any:
         return default
 
 
+def admin_denied_text(user_id: int | None) -> str:
+    if user_id is None:
+        return "нет доступа: не удалось определить Telegram ID."
+    return (
+        "нет доступа к админ-панели.\n\n"
+        f"ваш Telegram ID: <code>{user_id}</code>\n\n"
+        "если это владелец, добавьте этот ID в ADMIN_IDS на Render."
+    )
+
+
 def application_summary(row: Any) -> str:
     username = value(row, "username")
     username_line = f"@{username}" if username and not str(username).startswith("@") else (username or "без username")
@@ -89,11 +99,26 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=main_menu_markup(config))
 
 
+async def id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    user = update.effective_user
+    if message is None:
+        return
+    if user is None:
+        await message.reply_text("не удалось определить Telegram ID")
+        return
+    await message.reply_text(f"ваш Telegram ID: <code>{user.id}</code>", parse_mode=ParseMode.HTML)
+
+
 async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config: Config = context.application.bot_data["config"]
     message = update.effective_message
     user = update.effective_user
-    if message is None or not is_admin(config, user.id if user else None):
+    if message is None:
+        return
+    user_id = user.id if user else None
+    if not is_admin(config, user_id):
+        await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
         return
     await message.reply_text("админ-панель Le Nyan Paris", reply_markup=admin_menu_markup())
 
@@ -103,7 +128,11 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     pool: asyncpg.Pool = context.application.bot_data["pool"]
     message = update.effective_message
     user = update.effective_user
-    if message is None or not is_admin(config, user.id if user else None):
+    if message is None:
+        return
+    user_id = user.id if user else None
+    if not is_admin(config, user_id):
+        await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
         return
     rows = await list_pending_applications(pool, limit=10)
     if not rows:
@@ -284,6 +313,7 @@ def build_application(config: Config, pool: asyncpg.Pool) -> Application:
     app.bot_data["config"] = config
     app.bot_data["pool"] = pool
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("id", id_command))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("pending", pending_command))
     app.add_handler(CallbackQueryHandler(callback_handler))
