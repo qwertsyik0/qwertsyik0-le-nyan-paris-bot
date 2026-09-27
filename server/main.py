@@ -32,6 +32,13 @@ def _is_admin(config: Config, telegram_id: int) -> bool:
     return telegram_id in config.admin_ids
 
 
+def _row_value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+
+
 def _iso(value: Any) -> str | None:
     if isinstance(value, datetime):
         return value.isoformat()
@@ -39,22 +46,22 @@ def _iso(value: Any) -> str | None:
 
 
 def _compact_application(row: Any) -> dict[str, Any]:
-    first_name = str(row["character_first_name"] or "")
-    last_name = str(row["character_last_name"] or "")
+    first_name = str(_row_value(row, "character_first_name", "") or "")
+    last_name = str(_row_value(row, "character_last_name", "") or "")
     character_name = f"{first_name} {last_name}".strip()
-    username = row.get("username") if hasattr(row, "get") else row["username"] if "username" in row else None
+    username = _row_value(row, "username")
     return {
-        "id": row["id"],
-        "status": row["status"],
-        "telegram_id": row["telegram_id"],
+        "id": _row_value(row, "id"),
+        "status": _row_value(row, "status"),
+        "telegram_id": _row_value(row, "telegram_id"),
         "username": f"@{username}" if username and not str(username).startswith("@") else username,
         "character_name": character_name,
-        "character_age": row["character_age"],
-        "affiliation": row["affiliation"],
-        "role_preference": row["role_preference"],
-        "assigned_role": row["assigned_role"] or row["owner_comment"] or "",
-        "created_at": _iso(row["created_at"]),
-        "updated_at": _iso(row["updated_at"]),
+        "character_age": _row_value(row, "character_age"),
+        "affiliation": _row_value(row, "affiliation"),
+        "role_preference": _row_value(row, "role_preference"),
+        "assigned_role": _row_value(row, "assigned_role") or _row_value(row, "owner_comment") or "",
+        "created_at": _iso(_row_value(row, "created_at")),
+        "updated_at": _iso(_row_value(row, "updated_at")),
     }
 
 
