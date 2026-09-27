@@ -8,94 +8,246 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <main class="page">
-    <section class="hero card">
-      <p class="eyebrow">императорская канцелярия</p>
-      <h1>Le Nyan Paris</h1>
-      <p>подайте анкету персонажа. сама ролевая игра остается в чате, бот нужен только для анкет и сюжетных уведомлений.</p>
-    </section>
-
-    <section id="status-card" class="card status-card hidden">
-      <h2>статус анкеты</h2>
-      <div id="status-text" class="status-text"></div>
-      <div id="status-comment" class="status-comment"></div>
-    </section>
-
-    <form id="application-form" class="card form">
-      <h2>анкета</h2>
-
-      <div class="grid two">
-        <label>
-          <span>имя персонажа</span>
-          <input name="character_first_name" required maxlength="64" placeholder="например, Алекс">
-        </label>
-        <label>
-          <span>фамилия персонажа</span>
-          <input name="character_last_name" required maxlength="64" placeholder="например, Биджи">
-        </label>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">императорская канцелярия</p>
+        <h1>Le Nyan Paris</h1>
       </div>
+      <span id="connection-pill" class="pill muted">загрузка</span>
+    </header>
 
-      <div class="grid two">
-        <label>
-          <span>возраст</span>
-          <input name="character_age" required type="number" min="10" max="90" placeholder="19">
-        </label>
-        <label>
-          <span>пол</span>
-          <input name="character_gender" required maxlength="64" placeholder="женщина / мужчина / другое">
-        </label>
-      </div>
+    <nav class="tabbar" aria-label="разделы Mini App">
+      <button class="tab active" data-tab="home">главная</button>
+      <button class="tab" data-tab="application">анкета</button>
+      <button class="tab" data-tab="status">статус</button>
+      <button class="tab" data-tab="guide">правила</button>
+      <button class="tab" data-tab="locations">локации</button>
+      <button class="tab" data-tab="registry">реестр</button>
+      <button id="admin-tab-button" class="tab hidden" data-tab="admin">админка</button>
+    </nav>
 
-      <label>
-        <span>ориентация</span>
-        <input name="character_orientation" required maxlength="64" placeholder="гетеро / би / пан / другое">
-      </label>
+    <main class="content">
+      <section id="tab-home" class="screen active">
+        <article class="hero card">
+          <div>
+            <p class="eyebrow">Париж, 27 сентября 1808</p>
+            <h2>кабинет участника</h2>
+            <p>здесь можно подать анкету, посмотреть статус, открыть городской лист, быстро перейти в чат и свериться с правилами.</p>
+          </div>
+          <div class="hero-actions">
+            <button type="button" class="primary" data-open-tab="application">подать анкету</button>
+            <button type="button" class="ghost" data-open-link="chat">открыть чат</button>
+          </div>
+        </article>
 
-      <label>
-        <span>желаемая роль</span>
-        <input name="role_preference" required maxlength="120" placeholder="например, посыльная при больнице">
-      </label>
+        <section class="grid two">
+          <article class="card compact">
+            <span class="label">статус анкеты</span>
+            <strong id="home-status">нет данных</strong>
+            <p id="home-role">роль появится после принятия</p>
+          </article>
+          <article class="card compact">
+            <span class="label">городской лист</span>
+            <strong>указы, роли, газета</strong>
+            <p>публичная страница события с основными сведениями.</p>
+            <button type="button" class="small" data-open-link="citySheet">открыть</button>
+          </article>
+        </section>
 
-      <label>
-        <span>раздел</span>
-        <select name="affiliation" required>
-          <option value="город">город</option>
-          <option value="двор">двор</option>
-          <option value="суд">суд</option>
-          <option value="полиция">полиция</option>
-          <option value="армия">армия</option>
-          <option value="пресса">пресса</option>
-          <option value="медицина">медицина</option>
-          <option value="церковь">церковь</option>
-          <option value="подполье">подполье</option>
-          <option value="рынок">рынок</option>
-        </select>
-      </label>
+        <section class="card">
+          <h3>быстрый порядок</h3>
+          <div class="steps">
+            <div><b>1</b><span>заполнить анкету персонажа</span></div>
+            <div><b>2</b><span>дождаться решения администрации</span></div>
+            <div><b>3</b><span>получить роль и перейти в чат</span></div>
+            <div><b>4</b><span>начать игру в подходящей теме</span></div>
+          </div>
+        </section>
+      </section>
 
-      <label>
-        <span>описание персонажа</span>
-        <textarea name="character_description" required maxlength="2500" rows="7" placeholder="кто персонаж, чем живет, как оказался в Париже 1808 года"></textarea>
-      </label>
+      <section id="tab-application" class="screen">
+        <form id="application-form" class="card form">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">городская канцелярия</p>
+              <h2>анкета персонажа</h2>
+            </div>
+            <span id="form-status" class="pill muted">не отправлена</span>
+          </div>
 
-      <label>
-        <span>характер</span>
-        <textarea name="character_personality" required maxlength="1200" rows="5" placeholder="какой персонаж в общении, привычки, слабости"></textarea>
-      </label>
+          <div class="grid two">
+            <label>
+              <span>имя персонажа</span>
+              <input name="character_first_name" required maxlength="64" placeholder="например, Алекс">
+            </label>
+            <label>
+              <span>фамилия персонажа</span>
+              <input name="character_last_name" required maxlength="64" placeholder="например, Биджи">
+            </label>
+          </div>
 
-      <label>
-        <span>опыт ролевой</span>
-        <textarea name="roleplay_experience" required maxlength="1200" rows="4" placeholder="как давно играете, удобно ли писать большие посты"></textarea>
-      </label>
+          <div class="grid two">
+            <label>
+              <span>возраст</span>
+              <input name="character_age" required type="number" min="10" max="90" placeholder="19">
+            </label>
+            <label>
+              <span>пол</span>
+              <input name="character_gender" required maxlength="64" placeholder="женщина / мужчина / другое">
+            </label>
+          </div>
 
-      <label>
-        <span>комментарий <small>необязательно</small></span>
-        <textarea name="applicant_comment" maxlength="1200" rows="3" placeholder="что нужно знать администрации"></textarea>
-      </label>
+          <label>
+            <span>ориентация</span>
+            <input name="character_orientation" required maxlength="64" placeholder="гетеро / би / пан / другое">
+          </label>
 
-      <button id="submit-button" type="submit">отправить анкету</button>
-      <div id="form-message" class="form-message" aria-live="polite"></div>
-    </form>
-  </main>
+          <label>
+            <span>желаемая роль</span>
+            <input name="role_preference" required maxlength="120" placeholder="например, посыльная при больнице">
+          </label>
+
+          <label>
+            <span>раздел</span>
+            <select name="affiliation" required>
+              <option value="город">город</option>
+              <option value="двор">двор</option>
+              <option value="суд">суд</option>
+              <option value="полиция">полиция</option>
+              <option value="армия">армия</option>
+              <option value="пресса">пресса</option>
+              <option value="медицина">медицина</option>
+              <option value="церковь">церковь</option>
+              <option value="подполье">подполье</option>
+              <option value="рынок">рынок</option>
+            </select>
+          </label>
+
+          <label>
+            <span>описание персонажа</span>
+            <textarea name="character_description" required maxlength="2500" rows="7" placeholder="кто персонаж, чем живет, как оказался в Париже 1808 года"></textarea>
+          </label>
+
+          <label>
+            <span>характер</span>
+            <textarea name="character_personality" required maxlength="1200" rows="5" placeholder="какой персонаж в общении, привычки, слабости"></textarea>
+          </label>
+
+          <label>
+            <span>опыт ролевой</span>
+            <textarea name="roleplay_experience" required maxlength="1200" rows="4" placeholder="как давно играете, удобно ли писать большие посты"></textarea>
+          </label>
+
+          <label>
+            <span>комментарий <small>необязательно</small></span>
+            <textarea name="applicant_comment" maxlength="1200" rows="3" placeholder="что нужно знать администрации"></textarea>
+          </label>
+
+          <button id="submit-button" class="primary wide" type="submit">отправить анкету</button>
+          <div id="form-message" class="message" aria-live="polite"></div>
+        </form>
+      </section>
+
+      <section id="tab-status" class="screen">
+        <article id="status-card" class="card status-card">
+          <p class="eyebrow">личное дело</p>
+          <h2>статус анкеты</h2>
+          <div id="status-text" class="status-title">нет анкеты</div>
+          <div id="status-details" class="details-list"></div>
+          <div id="status-comment" class="note"></div>
+        </article>
+      </section>
+
+      <section id="tab-guide" class="screen">
+        <article class="card">
+          <p class="eyebrow">основные правила</p>
+          <h2>как играть</h2>
+          <div class="info-list">
+            <div><b>без метагейма</b><span>персонаж знает только то, что видел, слышал или получил через сюжет.</span></div>
+            <div><b>без godmode</b><span>нельзя решать исход действий за чужого персонажа без согласования.</span></div>
+            <div><b>локации через темы</b><span>уход из одной темы сначала отыгрывается там, потом вход в другую.</span></div>
+            <div><b>серьезные действия</b><span>аресты, убийства, крупные улики и политические последствия согласуются с администрацией.</span></div>
+            <div><b>стиль эпохи</b><span>никаких современных ролей, знаний будущего и современной речи в документах.</span></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>полезные ссылки</h3>
+          <div class="link-grid">
+            <button type="button" class="ghost" data-open-link="chat">чат события</button>
+            <button type="button" class="ghost" data-open-link="citySheet">городской лист</button>
+          </div>
+        </article>
+      </section>
+
+      <section id="tab-locations" class="screen">
+        <article class="card">
+          <p class="eyebrow">темы чата</p>
+          <h2>локации Парижа</h2>
+          <div class="location-grid">
+            <span>👑 дворец</span>
+            <span>⚖️ суд и канцелярия</span>
+            <span>🚔 полиция парижа</span>
+            <span>⛓ тюрьма</span>
+            <span>📰 газета и слухи</span>
+            <span>🛒 рынок</span>
+            <span>☕ кафе и салон</span>
+            <span>🏥 больница и лекарская</span>
+            <span>🎭 театр и искусство</span>
+            <span>⚔️ армия и гарнизон</span>
+            <span>🌑 подполье и катакомбы</span>
+            <span>🏘 улицы парижа</span>
+            <span>🎲 события и интерактивы</span>
+            <span>💬 вне роли</span>
+          </div>
+        </article>
+      </section>
+
+      <section id="tab-registry" class="screen">
+        <article class="card">
+          <p class="eyebrow">городской реестр</p>
+          <h2>роли и указы</h2>
+          <p>актуальный список принятых ролей, указы, газета, слухи и дела находятся на городском листе. Mini App хранит личную анкету, а публичный реестр ведется на сайте события.</p>
+          <button type="button" class="primary wide" data-open-link="citySheet">открыть городской лист</button>
+        </article>
+
+        <article class="card">
+          <h3>разделы ролей</h3>
+          <div class="chips">
+            <span>двор</span><span>город</span><span>суд</span><span>полиция</span><span>армия</span><span>пресса</span><span>медицина</span><span>церковь</span><span>подполье</span><span>рынок</span>
+          </div>
+        </article>
+      </section>
+
+      <section id="tab-admin" class="screen">
+        <article class="card">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">доступ владельца</p>
+              <h2>админка</h2>
+            </div>
+            <button id="refresh-admin" type="button" class="small">обновить</button>
+          </div>
+          <div id="admin-message" class="message"></div>
+          <div class="admin-stats">
+            <div><span>на рассмотрении</span><b id="admin-pending-count">—</b></div>
+            <div><span>принятые</span><b id="admin-accepted-count">—</b></div>
+          </div>
+        </article>
+
+        <article class="card">
+          <h3>новые анкеты</h3>
+          <div id="admin-pending-list" class="admin-list empty">загрузка...</div>
+        </article>
+
+        <article class="card">
+          <h3>последние принятые</h3>
+          <div id="admin-accepted-list" class="admin-list empty">загрузка...</div>
+        </article>
+      </section>
+    </main>
+  </div>
 
   <script src="./app.js"></script>
 </body>
