@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Le Nyan Paris</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="page">
+    <section class="hero card">
+      <p class="eyebrow">императорская канцелярия</p>
+      <h1>Le Nyan Paris</h1>
+      <p>подайте анкету персонажа. сама ролевая игра остается в чате, бот нужен только для анкет и сюжетных уведомлений.</p>
+    </section>
+
+    <section id="status-card" class="card status-card hidden">
+      <h2>статус анкеты</h2>
+      <div id="status-text" class="status-text"></div>
+      <div id="status-comment" class="status-comment"></div>
+    </section>
+
+    <form id="application-form" class="card form">
+      <h2>анкета</h2>
+
+      <div class="grid two">
+        <label>
+          <span>имя персонажа</span>
+          <input name="character_first_name" required maxlength="64" placeholder="например, Алекс">
+        </label>
+        <label>
+          <span>фамилия персонажа</span>
+          <input name="character_last_name" required maxlength="64" placeholder="например, Биджи">
+        </label>
+      </div>
+
+      <div class="grid two">
+        <label>
+          <span>возраст</span>
+          <input name="character_age" required type="number" min="10" max="90" placeholder="19">
+        </label>
+        <label>
+          <span>пол</span>
+          <input name="character_gender" required maxlength="64" placeholder="женщина / мужчина / другое">
+        </label>
+      </div>
+
+      <label>
+        <span>ориентация</span>
+        <input name="character_orientation" required maxlength="64" placeholder="гетеро / би / пан / другое">
+      </label>
+
+      <label>
+        <span>желаемая роль</span>
+        <input name="role_preference" required maxlength="120" placeholder="например, посыльная при больнице">
+      </label>
+
+      <label>
+        <span>раздел</span>
+        <select name="affiliation" required>
+          <option value="город">город</option>
+          <option value="двор">двор</option>
+          <option value="суд">суд</option>
+          <option value="полиция">полиция</option>
+          <option value="армия">армия</option>
+          <option value="пресса">пресса</option>
+          <option value="медицина">медицина</option>
+          <option value="церковь">церковь</option>
+          <option value="подполье">подполье</option>
+          <option value="рынок">рынок</option>
+        </select>
+      </label>
+
+      <label>
+        <span>описание персонажа</span>
+        <textarea name="character_description" required maxlength="2500" rows="7" placeholder="кто персонаж, чем живет, как оказался в Париже 1808 года"></textarea>
+      </label>
+
+      <label>
+        <span>характер</span>
+        <textarea name="character_personality" required maxlength="1200" rows="5" placeholder="какой персонаж в общении, привычки, слабости"></textarea>
+      </label>
+
+      <label>
+        <span>опыт ролевой</span>
+        <textarea name="roleplay_experience" required maxlength="1200" rows="4" placeholder="как давно играете, удобно ли писать большие посты"></textarea>
+      </label>
+
+      <label>
+        <span>комментарий <small>необязательно</small></span>
+        <textarea name="applicant_comment" maxlength="1200" rows="3" placeholder="что нужно знать администрации"></textarea>
+      </label>
+
+      <button id="submit-button" type="submit">отправить анкету</button>
+      <div id="form-message" class="form-message" aria-live="polite"></div>
+    </form>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
