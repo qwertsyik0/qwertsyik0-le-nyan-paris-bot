@@ -20,7 +20,9 @@ APPLICATION_FIELDS = {
 
 
 async def create_pool(database_url: str) -> asyncpg.Pool:
-    return await asyncpg.create_pool(database_url, min_size=1, max_size=5)
+    # Render Postgres requires TLS. Keeping this in code avoids depending on
+    # every DATABASE_URL value having sslmode=require appended manually.
+    return await asyncpg.create_pool(database_url, min_size=1, max_size=5, ssl=True)
 
 
 async def init_db(pool: asyncpg.Pool) -> None:
