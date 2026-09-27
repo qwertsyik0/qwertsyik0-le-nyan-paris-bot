@@ -4,15 +4,18 @@ from html import escape
 from typing import Any
 
 import asyncpg
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
 from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from .config import Config
-from .db import decide_application, get_application, list_pending_applications
+from .db import decide_application, get_application, list_accepted_applications, list_pending_applications
 
 WaitingAction = tuple[str, int]
 waiting_admin_actions: dict[int, WaitingAction] = {}
+
+EVENT_CHAT_URL = "https://t.me/+gB1sMZBd5Lo4YjQy"
+CITY_SHEET_URL = "https://qwertsyik0.github.io/le-nyan-paris/"
 
 
 def is_admin(config: Config, user_id: int | None) -> bool:
@@ -36,15 +39,28 @@ def admin_denied_text(user_id: int | None) -> str:
     )
 
 
-def application_summary(row: Any) -> str:
+def username_line(row: Any) -> str:
     username = value(row, "username")
-    username_line = f"@{username}" if username and not str(username).startswith("@") else (username or "без username")
-    full_name = f"{value(row, 'character_first_name', '')} {value(row, 'character_last_name', '')}".strip()
+    if username:
+        username_text = str(username)
+        return f"@{username_text}" if not username_text.startswith("@") else username_text
+    return "без username"
+
+
+def character_full_name(row: Any) -> str:
+    return f"{value(row, 'character_first_name', '')} {value(row, 'character_last_name', '')}".strip()
+
+
+def application_summary(row: Any) -> str:
+    status = value(row, "status", "—")
+    assigned_role = value(row, "assigned_role") or value(row, "owner_comment") or "—"
     return (
         "📋 <b>анкета Le Nyan Paris</b>\n\n"
         f"<b>ID:</b> {value(row, 'id')}\n"
-        f"<b>игрок:</b> {escape(str(username_line))}\n"
-        f"<b>персонаж:</b> {escape(full_name)}\n"
+        f"<b>статус:</b> {escape(str(status))}\n"
+        f"<b>игрок:</b> {escape(username_line(row))}\n"
+        f"<b>персонаж:</b> {escape(character_full_name(row))}\n"
+        f"<b>назначенная роль:</b> {escape(str(assigned_role))}\n"
         f"<b>возраст:</b> {value(row, 'character_age')}\n"
         f"<b>пол:</b> {escape(str(value(row, 'character_gender', '')))}\n"
         f"<b>ориентация:</b> {escape(str(value(row, 'character_orientation', '')))}\n"
@@ -54,6 +70,36 @@ def application_summary(row: Any) -> str:
         f"<b>характер:</b>\n{escape(str(value(row, 'character_personality', '')))}\n\n"
         f"<b>опыт:</b>\n{escape(str(value(row, 'roleplay_experience', '')))}\n\n"
         f"<b>комментарий:</b>\n{escape(str(value(row, 'applicant_comment', '') or '—'))}"
+    )
+
+
+def accepted_list_text(rows: list[asyncpg.Record]) -> str:
+    if not rows:
+        return "принятых анкет пока нет"
+    lines = ["✅ <b>принятые участники</b>\n"]
+    for row in rows:
+        role = value(row, "assigned_role") or value(row, "owner_comment") or "—"
+        lines.append(
+            f"#{value(row, 'id')} — {escape(character_full_name(row))}\n"
+            f"игрок: {escape(username_line(row))}\n"
+            f"роль: {escape(str(role))}"
+        )
+    return "\n\n".join(lines)
+
+
+def accepted_notification_text(role: str) -> str:
+    return (
+        "📜 <b>от императорской канцелярии</b>\n\n"
+        "многоуважаемый участник,\n\n"
+        "спешим уведомить вас, что поданная вами анкета была рассмотрена и одобрена.\n\n"
+        "вы приняты в число участников <b>Le Nyan Paris</b> и внесены в городской реестр.\n\n"
+        f"<b>назначенная роль:</b>\n{escape(role)}\n\n"
+        f"<b>чат события:</b>\n{EVENT_CHAT_URL}\n\n"
+        f"<b>городской лист парижа:</b>\n{CITY_SHEET_URL}\n\n"
+        "на городском листе будут размещаться указы, распоряжения, сведения о принятых ролях, городская газета и важные заметки для участников.\n\n"
+        "по прибытии в чат просим ознакомиться с закрепленными правилами и начать игру с локации, соответствующей вашей роли.\n\n"
+        "с уважением,\n"
+        "императорская канцелярия"
     )
 
 
@@ -82,6 +128,7 @@ def admin_menu_markup() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton("📋 новые анкеты", callback_data="admin:pending")],
+            [InlineKeyboardButton("✅ принятые", callback_data="admin:accepted")],
         ]
     )
 
@@ -147,6 +194,53 @@ async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
 
+async def accepted_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    config: Config = context.application.bot_data["config"]
+    pool: asyncpg.Pool = context.application.bot_data["pool"]
+    message = update.effective_message
+    user = update.effective_user
+    if message is None:
+        return
+    user_id = user.id if user else None
+    if not is_admin(config, user_id):
+        await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
+        return
+    rows = await list_accepted_applications(pool, limit=20)
+    await message.reply_text(accepted_list_text(rows), parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+
+async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    config: Config = context.application.bot_data["config"]
+    pool: asyncpg.Pool = context.application.bot_data["pool"]
+    message = update.effective_message
+    user = update.effective_user
+    if message is None:
+        return
+    user_id = user.id if user else None
+    if not is_admin(config, user_id):
+        await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
+        return
+    if not context.args:
+        await message.reply_text("укажите ID анкеты: /app 12")
+        return
+    try:
+        application_id = int(context.args[0])
+    except ValueError:
+        await message.reply_text("ID анкеты должен быть числом")
+        return
+    row = await get_application(pool, application_id)
+    if row is None:
+        await message.reply_text("анкета не найдена")
+        return
+    markup = application_decision_markup(application_id) if value(row, "status") == "pending" else None
+    await message.reply_text(
+        application_summary(row),
+        parse_mode=ParseMode.HTML,
+        reply_markup=markup,
+        disable_web_page_preview=True,
+    )
+
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config: Config = context.application.bot_data["config"]
     pool: asyncpg.Pool = context.application.bot_data["pool"]
@@ -172,6 +266,16 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 reply_markup=application_decision_markup(row["id"]),
                 disable_web_page_preview=True,
             )
+        return
+
+    if data == "admin:accepted":
+        await query.answer()
+        rows = await list_accepted_applications(pool, limit=20)
+        await query.message.reply_text(
+            accepted_list_text(rows),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
         return
 
     if not data.startswith("app:"):
@@ -245,12 +349,9 @@ async def admin_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await message.reply_text(f"анкета #{application_id} принята. роль: {text}")
         await context.bot.send_message(
             chat_id=decided["telegram_id"],
-            text=(
-                "📜 от императорской канцелярии\n\n"
-                "многоуважаемый участник, ваша анкета одобрена.\n\n"
-                f"назначенная роль:\n{text}\n\n"
-                "вы приняты в Le Nyan Paris."
-            ),
+            text=accepted_notification_text(text),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
         )
         return
 
@@ -308,6 +409,19 @@ async def notify_admins_about_application(bot, config: Config, row: Any) -> None
         )
 
 
+async def set_bot_commands(app: Application) -> None:
+    await app.bot.set_my_commands(
+        [
+            BotCommand("start", "открыть канцелярию"),
+            BotCommand("id", "показать Telegram ID"),
+            BotCommand("admin", "админ-панель"),
+            BotCommand("pending", "новые анкеты"),
+            BotCommand("accepted", "принятые участники"),
+            BotCommand("app", "открыть анкету по ID"),
+        ]
+    )
+
+
 def build_application(config: Config, pool: asyncpg.Pool) -> Application:
     app = Application.builder().token(config.bot_token).build()
     app.bot_data["config"] = config
@@ -316,6 +430,8 @@ def build_application(config: Config, pool: asyncpg.Pool) -> Application:
     app.add_handler(CommandHandler("id", id_command))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("pending", pending_command))
+    app.add_handler(CommandHandler("accepted", accepted_command))
+    app.add_handler(CommandHandler("app", app_command))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text_handler))
     return app
