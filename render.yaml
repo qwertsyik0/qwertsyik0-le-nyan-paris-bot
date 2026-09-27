@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: le-nyan-paris-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: MINI_APP_URL
+        sync: false
+      - key: ADMIN_IDS
+        value: "8587776155"
+      - key: WEBHOOK_SECRET
+        generateValue: true
