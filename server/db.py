@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ssl
 from typing import Any
 
 import asyncpg
@@ -20,9 +21,13 @@ APPLICATION_FIELDS = {
 
 
 async def create_pool(database_url: str) -> asyncpg.Pool:
-    # Render Postgres requires TLS. Keeping this in code avoids depending on
-    # every DATABASE_URL value having sslmode=require appended manually.
-    return await asyncpg.create_pool(database_url, min_size=1, max_size=5, ssl=True)
+    # Render Postgres requires TLS and may expose a self-signed certificate.
+    # We still encrypt the connection, but skip certificate verification so
+    # startup does not fail on Render's managed database certificate chain.
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    return await asyncpg.create_pool(database_url, min_size=1, max_size=5, ssl=ssl_context)
 
 
 async def init_db(pool: asyncpg.Pool) -> None:
