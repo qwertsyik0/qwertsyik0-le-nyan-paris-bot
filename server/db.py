@@ -219,6 +219,21 @@ async def list_pending_applications(pool: asyncpg.Pool, limit: int = 10) -> list
     return list(rows)
 
 
+async def list_accepted_applications(pool: asyncpg.Pool, limit: int = 20) -> list[asyncpg.Record]:
+    rows = await pool.fetch(
+        """
+        SELECT a.*, u.username
+        FROM paris_applications a
+        JOIN paris_users u ON u.telegram_id = a.telegram_id
+        WHERE a.status = 'accepted'
+        ORDER BY COALESCE(a.reviewed_at, a.updated_at, a.created_at) DESC
+        LIMIT $1;
+        """,
+        limit,
+    )
+    return list(rows)
+
+
 async def decide_application(
     pool: asyncpg.Pool,
     application_id: int,
