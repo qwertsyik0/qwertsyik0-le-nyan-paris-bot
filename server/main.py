@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from telegram import MenuButtonWebApp, Update, WebAppInfo
@@ -116,6 +117,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Le Nyan Paris Bot", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://qwertsyik0.github.io"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 app.mount("/miniapp", StaticFiles(directory=MINIAPP_DIR, html=True), name="miniapp")
 
 
