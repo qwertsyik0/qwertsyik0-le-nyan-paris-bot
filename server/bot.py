@@ -9,7 +9,14 @@ from telegram.constants import ParseMode
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 from .config import Config
-from .db import decide_application, get_application, list_accepted_applications, list_pending_applications
+from .db import (
+    create_letter,
+    decide_application,
+    find_user_by_identifier,
+    get_application,
+    list_accepted_applications,
+    list_pending_applications,
+)
 
 WaitingAction = tuple[str, int]
 waiting_admin_actions: dict[int, WaitingAction] = {}
@@ -100,6 +107,14 @@ def accepted_notification_text(role: str) -> str:
         "по прибытии в чат просим ознакомиться с закрепленными правилами и начать игру с локации, соответствующей вашей роли.\n\n"
         "с уважением,\n"
         "императорская канцелярия"
+    )
+
+
+def letter_notification_text(body: str) -> str:
+    return (
+        "📜 <b>вам доставлено письмо</b>\n\n"
+        f"{escape(body)}\n\n"
+        "письмо сохранено в вашем кабинете Le Nyan Paris."
     )
 
 
@@ -238,6 +253,70 @@ async def app_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         parse_mode=ParseMode.HTML,
         reply_markup=markup,
         disable_web_page_preview=True,
+    )
+
+
+async def letter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    config: Config = context.application.bot_data["config"]
+    pool: asyncpg.Pool = context.application.bot_data["pool"]
+    message = update.effective_message
+    user = update.effective_user
+    if message is None:
+        return
+    user_id = user.id if user else None
+    if not is_admin(config, user_id):
+        await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
+        return
+    if len(context.args) < 2:
+        await message.reply_text(
+            "формат:\n"
+            "<code>/letter @username текст письма</code>\n"
+            "<code>/letter 123456789 текст письма</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    target_raw = context.args[0]
+    body = " ".join(context.args[1:]).strip()
+    if not body:
+        await message.reply_text("текст письма не может быть пустым")
+        return
+    if len(body) > 3500:
+        await message.reply_text("письмо слишком длинное. максимум 3500 символов")
+        return
+
+    target = await find_user_by_identifier(pool, target_raw)
+    if target is None:
+        await message.reply_text(
+            "получатель не найден.\n\n"
+            "он должен хотя бы один раз открыть бота или Mini App, чтобы появиться в базе."
+        )
+        return
+
+    letter = await create_letter(
+        pool,
+        telegram_id=int(target["telegram_id"]),
+        sender_admin_id=int(user_id),
+        body=body,
+    )
+    notify_ok = True
+    try:
+        await context.bot.send_message(
+            chat_id=int(target["telegram_id"]),
+            text=letter_notification_text(body),
+            parse_mode=ParseMode.HTML,
+            reply_markup=main_menu_markup(config),
+            disable_web_page_preview=True,
+        )
+    except Exception as exc:
+        notify_ok = False
+        print(f"failed to notify letter recipient {target['telegram_id']}: {exc}")
+
+    username = target["username"] or target["telegram_id"]
+    suffix = "" if notify_ok else "\n\n⚠️ письмо сохранено, но Telegram-уведомление не удалось отправить."
+    await message.reply_text(
+        f"письмо #{letter['id']} отправлено для {escape(str(username))}.{suffix}",
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -418,6 +497,7 @@ async def set_bot_commands(app: Application) -> None:
             BotCommand("pending", "новые анкеты"),
             BotCommand("accepted", "принятые участники"),
             BotCommand("app", "открыть анкету по ID"),
+            BotCommand("letter", "отправить письмо игроку"),
         ]
     )
 
@@ -432,6 +512,7 @@ def build_application(config: Config, pool: asyncpg.Pool) -> Application:
     app.add_handler(CommandHandler("pending", pending_command))
     app.add_handler(CommandHandler("accepted", accepted_command))
     app.add_handler(CommandHandler("app", app_command))
+    app.add_handler(CommandHandler("letter", letter_command))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text_handler))
     return app
