@@ -77,6 +77,26 @@ async def init_db(pool: asyncpg.Pool) -> None:
             ON paris_applications (telegram_id);
             """
         )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS paris_letters (
+                id BIGSERIAL PRIMARY KEY,
+                telegram_id BIGINT NOT NULL REFERENCES paris_users(telegram_id) ON DELETE CASCADE,
+                sender_admin_id BIGINT NOT NULL,
+                letter_type TEXT NOT NULL DEFAULT 'letter',
+                title TEXT NOT NULL DEFAULT 'письмо из канцелярии',
+                body TEXT NOT NULL,
+                is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS paris_letters_user_created_idx
+            ON paris_letters (telegram_id, created_at DESC);
+            """
+        )
 
 
 async def upsert_user(pool: asyncpg.Pool, user: dict[str, Any]) -> None:
@@ -262,3 +282,79 @@ async def decide_application(
         assigned_role,
         reviewer_id,
     )
+
+
+async def find_user_by_identifier(pool: asyncpg.Pool, identifier: str) -> asyncpg.Record | None:
+    value = identifier.strip()
+    if not value:
+        return None
+    if value.startswith("@"):
+        value = value[1:].strip()
+    if value.isdigit():
+        return await pool.fetchrow(
+            "SELECT * FROM paris_users WHERE telegram_id = $1;",
+            int(value),
+        )
+    return await pool.fetchrow(
+        "SELECT * FROM paris_users WHERE lower(username) = lower($1);",
+        value,
+    )
+
+
+async def create_letter(
+    pool: asyncpg.Pool,
+    *,
+    telegram_id: int,
+    sender_admin_id: int,
+    body: str,
+    title: str = "письмо из канцелярии",
+    letter_type: str = "letter",
+) -> asyncpg.Record:
+    clean_body = _clean_text(body, max_len=3500)
+    clean_title = _clean_text(title, max_len=120)
+    clean_type = _clean_text(letter_type, max_len=40)
+    return await pool.fetchrow(
+        """
+        INSERT INTO paris_letters (
+            telegram_id,
+            sender_admin_id,
+            letter_type,
+            title,
+            body
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING *;
+        """,
+        telegram_id,
+        sender_admin_id,
+        clean_type,
+        clean_title,
+        clean_body,
+    )
+
+
+async def list_user_letters(pool: asyncpg.Pool, telegram_id: int, limit: int = 50) -> list[asyncpg.Record]:
+    rows = await pool.fetch(
+        """
+        SELECT *
+        FROM paris_letters
+        WHERE telegram_id = $1
+        ORDER BY created_at DESC
+        LIMIT $2;
+        """,
+        telegram_id,
+        limit,
+    )
+    return list(rows)
+
+
+async def count_unread_letters(pool: asyncpg.Pool, telegram_id: int) -> int:
+    value = await pool.fetchval(
+        """
+        SELECT COUNT(*)
+        FROM paris_letters
+        WHERE telegram_id = $1 AND is_read = FALSE;
+        """,
+        telegram_id,
+    )
+    return int(value or 0)
