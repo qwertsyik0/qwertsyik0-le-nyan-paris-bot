@@ -11,6 +11,13 @@
       .replaceAll("'", "&#039;");
   }
 
+  function formatDate(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
   async function post(path, payload = {}) {
     const response = await fetch(path, {
       method: "POST",
@@ -27,15 +34,19 @@
     document.querySelectorAll(".screen").forEach((screen) => screen.classList.toggle("active", screen.id === `tab-${name}`));
     window.scrollTo({ top: 0, behavior: "smooth" });
     if (name === "profile") loadProfile();
+    if (name === "warnings") loadWarnings();
   }
 
   function injectStyle() {
+    if (document.getElementById("feature-style")) return;
     const style = document.createElement("style");
+    style.id = "feature-style";
     style.textContent = `
       .feature-grid{display:grid;gap:12px}.feature-card{border:1px solid rgba(88,62,33,.15);border-radius:18px;padding:14px;background:rgba(255,255,255,.58)}
       .feature-kv{display:grid;gap:8px}.feature-kv div{display:grid;grid-template-columns:120px 1fr;gap:8px;border-bottom:1px solid rgba(88,62,33,.08);padding-bottom:8px}.feature-kv b{font-size:12px;text-transform:uppercase;opacity:.68}.feature-kv span{white-space:pre-wrap}
-      .feature-list{display:grid;gap:10px}.feature-player{border:1px solid rgba(88,62,33,.12);border-radius:16px;padding:12px;background:rgba(255,255,255,.52)}
-      .feature-player header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.feature-player code{font-size:11px;opacity:.7}.feature-player .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.feature-player input,.feature-player select,.feature-panel input,.feature-panel select,.feature-panel textarea{width:100%;box-sizing:border-box;border-radius:12px;border:1px solid rgba(88,62,33,.18);padding:9px;background:rgba(255,255,255,.72);color:inherit}.feature-panel textarea{min-height:120px}.feature-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.feature-note{font-size:12px;opacity:.72;white-space:pre-wrap}.hidden-feature{display:none!important}
+      .feature-list{display:grid;gap:10px}.feature-player,.warning-item{border:1px solid rgba(88,62,33,.12);border-radius:16px;padding:12px;background:rgba(255,255,255,.52)}
+      .feature-player header,.warning-item header{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.feature-player code,.warning-item code{font-size:11px;opacity:.7}.feature-player .row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.feature-player input,.feature-player select,.feature-panel input,.feature-panel select,.feature-panel textarea{width:100%;box-sizing:border-box;border-radius:12px;border:1px solid rgba(88,62,33,.18);padding:9px;background:rgba(255,255,255,.72);color:inherit}.feature-panel textarea{min-height:120px}.feature-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.feature-note{font-size:12px;opacity:.72;white-space:pre-wrap}.hidden-feature{display:none!important}
+      .warning-summary{border-color:rgba(140,40,40,.28);background:rgba(255,235,225,.72)}.warning-summary h3,.warning-title{margin:0 0 6px;text-transform:uppercase;letter-spacing:.06em}.warning-count{font-size:28px;line-height:1;font-weight:800}.warning-item b{display:block}.warning-item p{white-space:pre-wrap}.warning-type{display:inline-block;border:1px solid rgba(88,62,33,.18);border-radius:999px;padding:3px 9px;font-size:12px;background:rgba(255,255,255,.55)}
     `;
     document.head.appendChild(style);
   }
@@ -66,6 +77,75 @@
     document.getElementById("profile-refresh")?.addEventListener("click", loadProfile);
   }
 
+  function injectWarningsTab() {
+    const tabbar = document.querySelector(".tabbar");
+    if (!tabbar || document.querySelector('[data-tab="warnings"]')) return;
+    const button = document.createElement("button");
+    button.className = "tab";
+    button.dataset.tab = "warnings";
+    button.type = "button";
+    button.textContent = "предупреждения";
+    tabbar.insertBefore(button, document.getElementById("admin-tab-button") || null);
+    button.addEventListener("click", () => showTab("warnings"));
+
+    const main = document.querySelector("main.content");
+    const screen = document.createElement("section");
+    screen.id = "tab-warnings";
+    screen.className = "screen";
+    screen.innerHTML = `
+      <article class="card">
+        <div class="section-head"><div><p class="eyebrow">дисциплина</p><h2>предупреждения</h2></div><button id="warnings-refresh" class="small" type="button">обновить</button></div>
+        <div id="warnings-message" class="message"></div>
+        <div id="warnings-list" class="feature-list"></div>
+      </article>
+    `;
+    main?.insertBefore(screen, document.getElementById("tab-admin"));
+    document.getElementById("warnings-refresh")?.addEventListener("click", loadWarnings);
+  }
+
+  function renderWarningItems(rows) {
+    if (!rows?.length) {
+      return `<div class="feature-card">активных предупреждений нет.</div>`;
+    }
+    return rows.map((item) => `
+      <div class="warning-item">
+        <header>
+          <div>
+            <span class="warning-type">${esc(item.type_label || item.type)}</span>
+            <b>${esc(item.reason || "без причины")}</b>
+          </div>
+          <code>#${esc(item.id)}</code>
+        </header>
+        <p class="feature-note">от кого: ${esc(item.admin || "—")}\nкогда: ${esc(formatDate(item.created_at))}</p>
+      </div>
+    `).join("");
+  }
+
+  async function loadWarnings() {
+    const list = document.getElementById("warnings-list");
+    const msg = document.getElementById("warnings-message");
+    if (!list || !msg || !initData) return;
+    msg.textContent = "загрузка...";
+    try {
+      const data = await post("/api/warnings");
+      list.innerHTML = renderWarningItems(data.warnings || []);
+      msg.textContent = data.count ? `активных предупреждений: ${data.count}` : "предупреждений нет";
+      renderWarningsSummary(data.warnings || []);
+    } catch (error) {
+      msg.textContent = error.message;
+    }
+  }
+
+  function renderWarningsSummary(rows) {
+    const card = document.getElementById("profile-warning-card");
+    const count = document.getElementById("profile-warning-count");
+    const text = document.getElementById("profile-warning-text");
+    if (!card || !count || !text) return;
+    const activeCount = rows?.length || 0;
+    count.textContent = String(activeCount);
+    text.textContent = activeCount ? "есть активные записи. откройте список, чтобы посмотреть тип, причину, кто выдал и когда." : "активных записей нет.";
+  }
+
   async function loadProfile() {
     const box = document.getElementById("profile-content");
     const msg = document.getElementById("profile-message");
@@ -80,6 +160,12 @@
         return;
       }
       box.innerHTML = `
+        <div class="feature-card warning-summary" id="profile-warning-card">
+          <h3>предупреждения</h3>
+          <div class="warning-count" id="profile-warning-count">—</div>
+          <p id="profile-warning-text">загрузка...</p>
+          <button type="button" class="small" data-feature-open-tab="warnings">посмотреть</button>
+        </div>
         <div class="feature-card feature-kv">
           <div><b>персонаж</b><span>${esc(app.character_name)}</span></div>
           <div><b>роль</b><span>${esc(app.assigned_role)}</span></div>
@@ -96,6 +182,7 @@
         <div class="feature-card"><h3>письма</h3>${(data.letters || []).length ? (data.letters || []).map((l) => `<p><b>${esc(l.title || l.type_label)}</b><br>${esc(l.body || "")}</p>`).join("") : "писем пока нет"}</div>
       `;
       msg.textContent = `непрочитанные письма: ${data.unread_letters || 0}`;
+      loadWarnings();
     } catch (error) {
       msg.textContent = error.message;
     }
@@ -122,11 +209,27 @@
         <button id="group-letter-send" class="primary wide" type="button">отправить</button>
         <div id="group-letter-message" class="message"></div>
       </article>
+      <article class="card feature-panel" id="feature-admin-warnings">
+        <p class="eyebrow">дисциплина</p><h2>выдать предупреждение</h2>
+        <div class="grid two">
+          <input id="admin-warning-target" placeholder="@username или Telegram ID">
+          <select id="admin-warning-type"><option value="oral">устное замечание</option><option value="remark">замечание</option><option value="warning">предупреждение</option><option value="reprimand">выговор</option></select>
+        </div>
+        <textarea id="admin-warning-reason" placeholder="причина: за что выдается"></textarea>
+        <div class="feature-actions">
+          <button id="admin-warning-send" class="primary" type="button">выдать</button>
+          <button id="admin-warning-load" class="small" type="button">посмотреть игрока</button>
+        </div>
+        <div id="admin-warning-message" class="message"></div>
+        <div id="admin-warning-list" class="feature-list"></div>
+      </article>
     `);
     document.getElementById("players-refresh")?.addEventListener("click", loadPlayers);
     document.getElementById("players-search")?.addEventListener("input", () => setTimeout(loadPlayers, 150));
     document.getElementById("players-filter")?.addEventListener("change", loadPlayers);
     document.getElementById("group-letter-send")?.addEventListener("click", sendGroupLetter);
+    document.getElementById("admin-warning-send")?.addEventListener("click", sendAdminWarning);
+    document.getElementById("admin-warning-load")?.addEventListener("click", loadAdminWarnings);
   }
 
   async function loadPlayers() {
@@ -180,7 +283,43 @@
     }
   }
 
+  async function sendAdminWarning() {
+    const msg = document.getElementById("admin-warning-message");
+    const list = document.getElementById("admin-warning-list");
+    msg.textContent = "выдаю...";
+    try {
+      const data = await post("/api/admin/warnings/create", {
+        target: document.getElementById("admin-warning-target")?.value || "",
+        warning_type: document.getElementById("admin-warning-type")?.value || "warning",
+        reason: document.getElementById("admin-warning-reason")?.value || "",
+      });
+      msg.textContent = data.notify_ok ? `готово: ${data.target}` : `запись создана для ${data.target}, но уведомление не отправилось`;
+      await loadAdminWarnings();
+    } catch (error) {
+      msg.textContent = error.message;
+      if (list) list.innerHTML = "";
+    }
+  }
+
+  async function loadAdminWarnings() {
+    const msg = document.getElementById("admin-warning-message");
+    const list = document.getElementById("admin-warning-list");
+    const target = document.getElementById("admin-warning-target")?.value || "";
+    if (!msg || !list) return;
+    msg.textContent = "загрузка предупреждений...";
+    try {
+      const data = await post("/api/admin/warnings/list", { target });
+      list.innerHTML = renderWarningItems(data.warnings || []);
+      msg.textContent = `записей у ${data.target}: ${(data.warnings || []).length}`;
+    } catch (error) {
+      msg.textContent = error.message;
+      list.innerHTML = "";
+    }
+  }
+
   document.addEventListener("click", async (event) => {
+    const featureTab = event.target.closest("[data-feature-open-tab]");
+    if (featureTab) showTab(featureTab.dataset.featureOpenTab);
     const save = event.target.closest("[data-save-player]");
     if (save) savePlayer(save.closest(".feature-player"));
     const open = event.target.closest("[data-open-card]");
@@ -189,7 +328,9 @@
 
   injectStyle();
   injectProfileTab();
+  injectWarningsTab();
   injectAdminTools();
   setTimeout(loadProfile, 700);
+  setTimeout(loadWarnings, 900);
   setTimeout(loadPlayers, 1200);
 })();
