@@ -14,12 +14,14 @@ from telegram import MenuButtonWebApp, Update, WebAppInfo
 from .bot import CITY_SHEET_URL, EVENT_CHAT_URL, build_application, notify_admins_about_application, set_bot_commands
 from .config import Config, get_config
 from .db import (
+    count_unread_letters,
     create_pool,
     get_application,
     get_user_application,
     init_db,
     list_accepted_applications,
     list_pending_applications,
+    list_user_letters,
     submit_application,
     upsert_user,
 )
@@ -63,6 +65,17 @@ def _compact_application(row: Any) -> dict[str, Any]:
         "assigned_role": _row_value(row, "assigned_role") or _row_value(row, "owner_comment") or "",
         "created_at": _iso(_row_value(row, "created_at")),
         "updated_at": _iso(_row_value(row, "updated_at")),
+    }
+
+
+def _compact_letter(row: Any) -> dict[str, Any]:
+    return {
+        "id": _row_value(row, "id"),
+        "type": _row_value(row, "letter_type"),
+        "title": _row_value(row, "title"),
+        "body": _row_value(row, "body"),
+        "is_read": bool(_row_value(row, "is_read", False)),
+        "created_at": _iso(_row_value(row, "created_at")),
     }
 
 
@@ -161,11 +174,12 @@ async def api_me(request: Request):
     telegram_id = int(user["id"])
     await upsert_user(pool, user)
     application = await get_user_application(pool, telegram_id)
+    unread_letters = await count_unread_letters(pool, telegram_id)
     return {
         "ok": True,
         "is_admin": _is_admin(config, telegram_id),
+        "unread_letters": unread_letters,
         "links": {
-            "chat": EVENT_CHAT_URL,
             "citySheet": CITY_SHEET_URL,
         },
         "user": {
@@ -174,6 +188,23 @@ async def api_me(request: Request):
             "first_name": user.get("first_name"),
         },
         "application": dict(application) if application else None,
+    }
+
+
+@app.post("/api/letters")
+async def api_letters(request: Request):
+    config: Config = request.app.state.config
+    pool = request.app.state.pool
+    body: dict[str, Any] = await request.json()
+    user = validate_webapp_init_data(str(body.get("initData") or ""), config.bot_token)
+    telegram_id = int(user["id"])
+    await upsert_user(pool, user)
+    rows = await list_user_letters(pool, telegram_id, limit=50)
+    unread_letters = await count_unread_letters(pool, telegram_id)
+    return {
+        "ok": True,
+        "unread_letters": unread_letters,
+        "letters": [_compact_letter(row) for row in rows],
     }
 
 
