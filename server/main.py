@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from .main_base import app
+from . import main_base as _main_base
 from .admin_ext import router as admin_ext_router
 from .cleanup_router import router as cleanup_router
+from .lenyan_ext import patch_lenyan_broadcast
+from .main_base import app
+
+patch_lenyan_broadcast(_main_base)
 
 app.include_router(admin_ext_router)
 app.include_router(cleanup_router)
