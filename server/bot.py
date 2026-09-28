@@ -111,10 +111,12 @@ def accepted_notification_text(role: str) -> str:
 
 
 def letter_notification_text(body: str) -> str:
+    safe_body = escape(body).strip()
     return (
         "📜 <b>вам доставлено письмо</b>\n\n"
-        f"{escape(body)}\n\n"
-        "письмо сохранено в вашем кабинете Le Nyan Paris."
+        "<i>от императорской канцелярии Le Nyan Paris</i>\n\n"
+        f"<blockquote>{safe_body}</blockquote>\n\n"
+        "<b>письмо сохранено в разделе «письма» вашего кабинета.</b>"
     )
 
 
@@ -305,7 +307,6 @@ async def letter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             chat_id=int(target["telegram_id"]),
             text=letter_notification_text(body),
             parse_mode=ParseMode.HTML,
-            reply_markup=main_menu_markup(config),
             disable_web_page_preview=True,
         )
     except Exception as exc:
