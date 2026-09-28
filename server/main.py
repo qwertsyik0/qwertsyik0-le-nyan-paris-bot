@@ -6,13 +6,16 @@ from .cleanup_router import router as cleanup_router
 from .lenyan_ext import patch_lenyan_broadcast
 from .main_base import app
 from .player_features import patch_player_features, router as player_features_router
+from .warnings_ext import patch_warning_features, router as warnings_ext_router
 
 patch_lenyan_broadcast(_main_base)
 patch_player_features(_main_base)
+patch_warning_features(_main_base)
 
 app.include_router(admin_ext_router)
 app.include_router(cleanup_router)
 app.include_router(player_features_router)
+app.include_router(warnings_ext_router)
 
 _test_application_cleanup_done = False
 _dead_luka_cleanup_done = False
