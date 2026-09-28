@@ -19,6 +19,8 @@ APPLICATION_FIELDS = {
     "applicant_comment",
 }
 
+LETTER_STATUSES = {"new", "read", "in_work", "closed", "hidden"}
+
 
 async def create_pool(database_url: str) -> asyncpg.Pool:
     # Render Postgres requires TLS and may expose a self-signed certificate.
@@ -87,14 +89,33 @@ async def init_db(pool: asyncpg.Pool) -> None:
                 title TEXT NOT NULL DEFAULT 'письмо из канцелярии',
                 body TEXT NOT NULL,
                 is_read BOOLEAN NOT NULL DEFAULT FALSE,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                status TEXT NOT NULL DEFAULT 'new',
+                status_changed_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
+            """
+        )
+        await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'new';")
+        await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMPTZ;")
+        await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
+        await conn.execute(
+            """
+            UPDATE paris_letters
+            SET status = CASE WHEN is_read THEN 'read' ELSE 'new' END
+            WHERE status IS NULL OR status = '';
             """
         )
         await conn.execute(
             """
             CREATE INDEX IF NOT EXISTS paris_letters_user_created_idx
             ON paris_letters (telegram_id, created_at DESC);
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS paris_letters_status_created_idx
+            ON paris_letters (status, created_at DESC);
             """
         )
 
@@ -126,6 +147,13 @@ def _clean_text(value: Any, *, max_len: int, required: bool = True) -> str:
     if len(text) > max_len:
         raise ValueError("too_long")
     return text
+
+
+def normalize_letter_status(status: str) -> str:
+    clean_status = str(status or "").strip().lower()
+    if clean_status not in LETTER_STATUSES:
+        raise ValueError("invalid_letter_status")
+    return clean_status
 
 
 def normalize_application(payload: dict[str, Any]) -> dict[str, Any]:
@@ -320,9 +348,10 @@ async def create_letter(
             sender_admin_id,
             letter_type,
             title,
-            body
+            body,
+            status
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4, $5, 'new')
         RETURNING *;
         """,
         telegram_id,
@@ -338,7 +367,7 @@ async def list_user_letters(pool: asyncpg.Pool, telegram_id: int, limit: int = 5
         """
         SELECT *
         FROM paris_letters
-        WHERE telegram_id = $1
+        WHERE telegram_id = $1 AND status <> 'hidden'
         ORDER BY created_at DESC
         LIMIT $2;
         """,
@@ -348,12 +377,58 @@ async def list_user_letters(pool: asyncpg.Pool, telegram_id: int, limit: int = 5
     return list(rows)
 
 
+async def list_admin_letters(pool: asyncpg.Pool, status: str | None = None, limit: int = 50) -> list[asyncpg.Record]:
+    query_status = None if not status or status == "all" else normalize_letter_status(status)
+    rows = await pool.fetch(
+        """
+        SELECT
+            l.*,
+            u.username,
+            u.first_name AS tg_first_name,
+            u.last_name AS tg_last_name,
+            a.character_first_name,
+            a.character_last_name,
+            a.assigned_role,
+            a.owner_comment
+        FROM paris_letters l
+        JOIN paris_users u ON u.telegram_id = l.telegram_id
+        LEFT JOIN paris_applications a ON a.telegram_id = l.telegram_id
+        WHERE ($1::TEXT IS NULL OR l.status = $1)
+        ORDER BY l.created_at DESC
+        LIMIT $2;
+        """,
+        query_status,
+        limit,
+    )
+    return list(rows)
+
+
+async def update_letter_status(pool: asyncpg.Pool, letter_id: int, status: str) -> asyncpg.Record | None:
+    clean_status = normalize_letter_status(status)
+    is_read = clean_status in {"read", "in_work", "closed", "hidden"}
+    return await pool.fetchrow(
+        """
+        UPDATE paris_letters
+        SET
+            status = $2,
+            is_read = $3,
+            status_changed_at = NOW(),
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *;
+        """,
+        letter_id,
+        clean_status,
+        is_read,
+    )
+
+
 async def count_unread_letters(pool: asyncpg.Pool, telegram_id: int) -> int:
     value = await pool.fetchval(
         """
         SELECT COUNT(*)
         FROM paris_letters
-        WHERE telegram_id = $1 AND is_read = FALSE;
+        WHERE telegram_id = $1 AND status <> 'hidden' AND is_read = FALSE;
         """,
         telegram_id,
     )
