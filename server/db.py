@@ -20,6 +20,7 @@ APPLICATION_FIELDS = {
 }
 
 LETTER_STATUSES = {"new", "read", "in_work", "closed", "hidden"}
+LETTER_TYPES = {"letter", "summons", "task", "rumor", "warning"}
 
 
 async def create_pool(database_url: str) -> asyncpg.Pool:
@@ -96,6 +97,8 @@ async def init_db(pool: asyncpg.Pool) -> None:
             );
             """
         )
+        await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS letter_type TEXT NOT NULL DEFAULT 'letter';")
+        await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS title TEXT NOT NULL DEFAULT 'письмо из канцелярии';")
         await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'new';")
         await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMPTZ;")
         await conn.execute("ALTER TABLE paris_letters ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();")
@@ -104,6 +107,13 @@ async def init_db(pool: asyncpg.Pool) -> None:
             UPDATE paris_letters
             SET status = CASE WHEN is_read THEN 'read' ELSE 'new' END
             WHERE status IS NULL OR status = '';
+            """
+        )
+        await conn.execute(
+            """
+            UPDATE paris_letters
+            SET letter_type = 'letter'
+            WHERE letter_type IS NULL OR letter_type = '';
             """
         )
         await conn.execute(
@@ -154,6 +164,13 @@ def normalize_letter_status(status: str) -> str:
     if clean_status not in LETTER_STATUSES:
         raise ValueError("invalid_letter_status")
     return clean_status
+
+
+def normalize_letter_type(letter_type: str) -> str:
+    clean_type = str(letter_type or "letter").strip().lower()
+    if clean_type not in LETTER_TYPES:
+        raise ValueError("invalid_letter_type")
+    return clean_type
 
 
 def normalize_application(payload: dict[str, Any]) -> dict[str, Any]:
@@ -339,8 +356,8 @@ async def create_letter(
     letter_type: str = "letter",
 ) -> asyncpg.Record:
     clean_body = _clean_text(body, max_len=3500)
-    clean_title = _clean_text(title, max_len=120)
-    clean_type = _clean_text(letter_type, max_len=40)
+    clean_title = _clean_text(title, max_len=120, required=False) or "письмо из канцелярии"
+    clean_type = normalize_letter_type(letter_type)
     return await pool.fetchrow(
         """
         INSERT INTO paris_letters (
@@ -403,6 +420,52 @@ async def list_admin_letters(pool: asyncpg.Pool, status: str | None = None, limi
     return list(rows)
 
 
+async def list_admin_user_letters(pool: asyncpg.Pool, telegram_id: int, limit: int = 80) -> list[asyncpg.Record]:
+    rows = await pool.fetch(
+        """
+        SELECT
+            l.*,
+            u.username,
+            u.first_name AS tg_first_name,
+            u.last_name AS tg_last_name,
+            a.character_first_name,
+            a.character_last_name,
+            a.assigned_role,
+            a.owner_comment
+        FROM paris_letters l
+        JOIN paris_users u ON u.telegram_id = l.telegram_id
+        LEFT JOIN paris_applications a ON a.telegram_id = l.telegram_id
+        WHERE l.telegram_id = $1
+        ORDER BY l.created_at DESC
+        LIMIT $2;
+        """,
+        telegram_id,
+        limit,
+    )
+    return list(rows)
+
+
+async def get_admin_letter(pool: asyncpg.Pool, letter_id: int) -> asyncpg.Record | None:
+    return await pool.fetchrow(
+        """
+        SELECT
+            l.*,
+            u.username,
+            u.first_name AS tg_first_name,
+            u.last_name AS tg_last_name,
+            a.character_first_name,
+            a.character_last_name,
+            a.assigned_role,
+            a.owner_comment
+        FROM paris_letters l
+        JOIN paris_users u ON u.telegram_id = l.telegram_id
+        LEFT JOIN paris_applications a ON a.telegram_id = l.telegram_id
+        WHERE l.id = $1;
+        """,
+        letter_id,
+    )
+
+
 async def update_letter_status(pool: asyncpg.Pool, letter_id: int, status: str) -> asyncpg.Record | None:
     clean_status = normalize_letter_status(status)
     is_read = clean_status in {"read", "in_work", "closed", "hidden"}
@@ -421,6 +484,25 @@ async def update_letter_status(pool: asyncpg.Pool, letter_id: int, status: str) 
         clean_status,
         is_read,
     )
+
+
+async def mark_user_letters_read(pool: asyncpg.Pool, telegram_id: int) -> int:
+    result = await pool.execute(
+        """
+        UPDATE paris_letters
+        SET
+            status = 'read',
+            is_read = TRUE,
+            status_changed_at = COALESCE(status_changed_at, NOW()),
+            updated_at = NOW()
+        WHERE telegram_id = $1 AND status = 'new';
+        """,
+        telegram_id,
+    )
+    try:
+        return int(result.split()[-1])
+    except (ValueError, IndexError):
+        return 0
 
 
 async def count_unread_letters(pool: asyncpg.Pool, telegram_id: int) -> int:
