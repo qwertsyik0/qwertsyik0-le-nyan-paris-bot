@@ -15,7 +15,9 @@ from .db import (
     find_user_by_identifier,
     get_application,
     list_accepted_applications,
+    list_admin_letters,
     list_pending_applications,
+    update_letter_status,
 )
 
 WaitingAction = tuple[str, int]
@@ -23,6 +25,15 @@ waiting_admin_actions: dict[int, WaitingAction] = {}
 
 EVENT_CHAT_URL = "https://t.me/+gB1sMZBd5Lo4YjQy"
 CITY_SHEET_URL = "https://qwertsyik0.github.io/le-nyan-paris/"
+
+LETTER_STATUS_LABELS = {
+    "new": "новое",
+    "read": "прочитано",
+    "in_work": "в работе",
+    "closed": "закрыто",
+    "hidden": "скрыто",
+}
+LETTER_STATUSES_TEXT = "new / read / in_work / closed / hidden"
 
 
 def is_admin(config: Config, user_id: int | None) -> bool:
@@ -118,6 +129,36 @@ def letter_notification_text(body: str) -> str:
         f"<blockquote>{safe_body}</blockquote>\n\n"
         "<b>письмо сохранено в разделе «письма» вашего кабинета.</b>"
     )
+
+
+def letter_status_label(status: str | None) -> str:
+    return LETTER_STATUS_LABELS.get(str(status or ""), str(status or "—"))
+
+
+def letter_admin_line(row: Any) -> str:
+    username = username_line(row)
+    status = letter_status_label(value(row, "status"))
+    title = value(row, "title", "письмо из канцелярии")
+    body = str(value(row, "body", "") or "")
+    short_body = body[:220] + ("..." if len(body) > 220 else "")
+    character = character_full_name(row) or "без персонажа"
+    return (
+        f"📨 <b>письмо #{value(row, 'id')}</b>\n"
+        f"<b>статус:</b> {escape(status)}\n"
+        f"<b>получатель:</b> {escape(username)} | <code>{value(row, 'telegram_id')}</code>\n"
+        f"<b>персонаж:</b> {escape(character)}\n"
+        f"<b>заголовок:</b> {escape(str(title))}\n"
+        f"<b>текст:</b>\n{escape(short_body)}"
+    )
+
+
+def letters_list_text(rows: list[asyncpg.Record], status: str = "all") -> str:
+    if not rows:
+        return "писем с таким фильтром нет"
+    lines = [f"📨 <b>письма</b> | фильтр: <code>{escape(status)}</code>\n"]
+    for row in rows:
+        lines.append(letter_admin_line(row))
+    return "\n\n".join(lines)
 
 
 def application_decision_markup(application_id: int) -> InlineKeyboardMarkup:
@@ -321,6 +362,80 @@ async def letter_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     )
 
 
+async def letters_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    config: Config = context.application.bot_data["config"]
+    pool: asyncpg.Pool = context.application.bot_data["pool"]
+    message = update.effective_message
+    user = update.effective_user
+    if message is None:
+        return
+    user_id = user.id if user else None
+    if not is_admin(config, user_id):
+        await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
+        return
+
+    status = context.args[0] if context.args else "all"
+    if status not in {"all", *LETTER_STATUS_LABELS.keys()}:
+        await message.reply_text(
+            f"неверный статус. доступно: all / {LETTER_STATUSES_TEXT}",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    rows = await list_admin_letters(pool, status=status, limit=20)
+    await message.reply_text(
+        letters_list_text(rows, status=status),
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
+
+
+async def letter_status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    config: Config = context.application.bot_data["config"]
+    pool: asyncpg.Pool = context.application.bot_data["pool"]
+    message = update.effective_message
+    user = update.effective_user
+    if message is None:
+        return
+    user_id = user.id if user else None
+    if not is_admin(config, user_id):
+        await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
+        return
+
+    if len(context.args) < 2:
+        await message.reply_text(
+            "формат:\n"
+            "<code>/letterstatus ID status</code>\n\n"
+            f"статусы: <code>{LETTER_STATUSES_TEXT}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    try:
+        letter_id = int(context.args[0])
+    except ValueError:
+        await message.reply_text("ID письма должен быть числом")
+        return
+
+    status = context.args[1]
+    if status not in LETTER_STATUS_LABELS:
+        await message.reply_text(
+            f"неверный статус. доступно: <code>{LETTER_STATUSES_TEXT}</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    row = await update_letter_status(pool, letter_id, status)
+    if row is None:
+        await message.reply_text("письмо не найдено")
+        return
+
+    await message.reply_text(
+        f"статус письма #{letter_id} изменен на <b>{escape(letter_status_label(status))}</b>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config: Config = context.application.bot_data["config"]
     pool: asyncpg.Pool = context.application.bot_data["pool"]
@@ -499,6 +614,8 @@ async def set_bot_commands(app: Application) -> None:
             BotCommand("accepted", "принятые участники"),
             BotCommand("app", "открыть анкету по ID"),
             BotCommand("letter", "отправить письмо игроку"),
+            BotCommand("letters", "список писем"),
+            BotCommand("letterstatus", "изменить статус письма"),
         ]
     )
 
@@ -514,6 +631,8 @@ def build_application(config: Config, pool: asyncpg.Pool) -> Application:
     app.add_handler(CommandHandler("accepted", accepted_command))
     app.add_handler(CommandHandler("app", app_command))
     app.add_handler(CommandHandler("letter", letter_command))
+    app.add_handler(CommandHandler("letters", letters_command))
+    app.add_handler(CommandHandler("letterstatus", letter_status_command))
     app.add_handler(CallbackQueryHandler(callback_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, admin_text_handler))
     return app
