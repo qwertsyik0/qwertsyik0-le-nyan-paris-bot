@@ -15,6 +15,7 @@ app.include_router(cleanup_router)
 app.include_router(player_features_router)
 
 _test_application_cleanup_done = False
+_dead_luka_cleanup_done = False
 
 
 @app.middleware("http")
@@ -50,4 +51,30 @@ async def hide_test_application_once(request, call_next):
                 """
             )
             _test_application_cleanup_done = True
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def remove_dead_luka_application_once(request, call_next):
+    global _dead_luka_cleanup_done
+    if not _dead_luka_cleanup_done:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            await pool.execute(
+                """
+                DELETE FROM paris_applications AS a
+                USING paris_users AS u
+                WHERE a.telegram_id = u.telegram_id
+                  AND lower(COALESCE(u.username, '')) = 'pixel_are_you_okay'
+                  AND (
+                    (
+                      lower(COALESCE(a.character_first_name, '')) = 'лука'
+                      AND lower(COALESCE(a.character_last_name, '')) = 'нортвест'
+                    )
+                    OR lower(COALESCE(a.role_preference, '')) LIKE '%жандарм%'
+                    OR lower(COALESCE(a.assigned_role, '')) LIKE '%жандарм%'
+                  );
+                """
+            )
+            _dead_luka_cleanup_done = True
     return await call_next(request)
