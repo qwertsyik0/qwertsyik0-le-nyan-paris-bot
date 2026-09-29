@@ -21,6 +21,7 @@ _test_application_cleanup_done = False
 _dead_luka_cleanup_done = False
 _leya_health_promotion_done = False
 _lona_army_promotion_done = False
+_kira_name_patch_done = False
 
 
 @app.middleware("http")
@@ -128,4 +129,27 @@ async def promote_lona_army_role_once(request, call_next):
                 """
             )
             _lona_army_promotion_done = True
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def rename_kira_application_once(request, call_next):
+    global _kira_name_patch_done
+    if not _kira_name_patch_done:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            await pool.execute(
+                """
+                UPDATE paris_applications AS a
+                SET
+                    character_first_name = 'Кира',
+                    character_last_name = '',
+                    updated_at = NOW()
+                FROM paris_users AS u
+                WHERE a.telegram_id = u.telegram_id
+                  AND lower(COALESCE(u.username, '')) = 'mommytil'
+                  AND a.status = 'accepted';
+                """
+            )
+            _kira_name_patch_done = True
     return await call_next(request)
