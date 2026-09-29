@@ -20,6 +20,7 @@ app.include_router(warnings_ext_router)
 _test_application_cleanup_done = False
 _dead_luka_cleanup_done = False
 _leya_health_promotion_done = False
+_lona_army_promotion_done = False
 
 
 @app.middleware("http")
@@ -104,4 +105,27 @@ async def promote_leya_health_role_once(request, call_next):
                 """
             )
             _leya_health_promotion_done = True
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def promote_lona_army_role_once(request, call_next):
+    global _lona_army_promotion_done
+    if not _lona_army_promotion_done:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            await pool.execute(
+                """
+                UPDATE paris_applications AS a
+                SET
+                    assigned_role = 'главная распорядительница военного ведомства Парижа',
+                    affiliation = 'армия',
+                    updated_at = NOW()
+                FROM paris_users AS u
+                WHERE a.telegram_id = u.telegram_id
+                  AND lower(COALESCE(u.username, '')) = 'ewq1k'
+                  AND a.status = 'accepted';
+                """
+            )
+            _lona_army_promotion_done = True
     return await call_next(request)
