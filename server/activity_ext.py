@@ -1,21 +1,21 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from html import escape
 from typing import Any
 
 import asyncpg
 from telegram import BotCommand, Update
 from telegram.constants import ParseMode
-from telegram.ext import CommandHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import ApplicationHandlerStop, CommandHandler, ContextTypes, MessageHandler, filters
 
-from .bot import is_admin
 from .config import Config
-from .db import find_user_by_identifier, upsert_user
+from .db import find_user_by_identifier
 
 _activity_tables_ready = False
 
-COMMANDS_WITH_ACTIVITY = [
+
+BASE_COMMANDS = [
     BotCommand("start", "открыть канцелярию"),
     BotCommand("profile", "мой профиль"),
     BotCommand("myapp", "моя анкета"),
@@ -33,38 +33,41 @@ COMMANDS_WITH_ACTIVITY = [
     BotCommand("lenyan", "объявление с отметками"),
     BotCommand("activity", "активность игроков"),
     BotCommand("active", "активность игроков"),
+    BotCommand("ping", "проверка бота"),
 ]
+
+
+def _is_admin(config: Config, user_id: int | None) -> bool:
+    return bool(user_id and user_id in config.admin_ids)
 
 
 def _is_group_chat(chat_type: str | None) -> bool:
     return chat_type in {"group", "supergroup"}
 
 
-def _row_value(row: Any, key: str, default: Any = None) -> Any:
-    try:
-        return row[key]
-    except (KeyError, IndexError, TypeError):
-        return default
-
-
 def _format_dt(value: Any) -> str:
     if isinstance(value, datetime):
         return value.strftime("%d.%m.%Y %H:%M")
-    if isinstance(value, date):
-        return value.strftime("%d.%m.%Y")
     return str(value or "—")
 
 
+def _record_value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (KeyError, IndexError, TypeError):
+        if isinstance(row, dict):
+            return row.get(key, default)
+        return default
+
+
 def _display_user(row: Any) -> str:
-    username = str(_row_value(row, "username", "") or "").strip().lstrip("@")
-    first_name = str(_row_value(row, "first_name", "") or "").strip()
-    last_name = str(_row_value(row, "last_name", "") or "").strip()
-    telegram_id = _row_value(row, "telegram_id", "")
+    username = str(_record_value(row, "username", "") or "").strip()
+    first_name = str(_record_value(row, "first_name", "") or "").strip()
+    telegram_id = _record_value(row, "telegram_id", "—")
     if username:
-        return f"@{username}"
-    full_name = f"{first_name} {last_name}".strip()
-    if full_name:
-        return full_name
+        return f"@{username.lstrip('@')}"
+    if first_name:
+        return first_name
     return f"id {telegram_id}"
 
 
@@ -72,64 +75,49 @@ def _safe_display_user(row: Any) -> str:
     return escape(_display_user(row))
 
 
-def _period_text(days: int | None) -> str:
-    if days is None:
-        return "все время"
-    if days == 1:
-        return "сегодня"
-    return f"последние {days} дн."
-
-
-def _scope_text(chat_title: str | None, chat_id: int | None) -> str:
-    if chat_id is None:
-        return "все группы"
-    return chat_title or "текущая группа"
-
-
 async def ensure_activity_tables(pool: asyncpg.Pool) -> None:
     global _activity_tables_ready
     if _activity_tables_ready:
         return
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS paris_group_activity (
-                chat_id BIGINT NOT NULL,
-                chat_title TEXT NOT NULL DEFAULT '',
-                telegram_id BIGINT NOT NULL,
-                username TEXT NOT NULL DEFAULT '',
-                first_name TEXT NOT NULL DEFAULT '',
-                last_name TEXT NOT NULL DEFAULT '',
-                message_count BIGINT NOT NULL DEFAULT 0,
-                first_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                PRIMARY KEY (chat_id, telegram_id)
-            );
-            """
-        )
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS paris_group_activity_daily (
-                chat_id BIGINT NOT NULL,
-                telegram_id BIGINT NOT NULL,
-                activity_date DATE NOT NULL DEFAULT CURRENT_DATE,
-                message_count BIGINT NOT NULL DEFAULT 0,
-                PRIMARY KEY (chat_id, telegram_id, activity_date)
-            );
-            """
-        )
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS paris_group_activity_count_idx
-            ON paris_group_activity (chat_id, message_count DESC, last_message_at DESC);
-            """
-        )
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS paris_group_activity_daily_idx
-            ON paris_group_activity_daily (chat_id, activity_date DESC, message_count DESC);
-            """
-        )
+    await pool.execute(
+        """
+        CREATE TABLE IF NOT EXISTS paris_group_activity (
+            chat_id BIGINT NOT NULL,
+            chat_title TEXT NOT NULL DEFAULT '',
+            telegram_id BIGINT NOT NULL,
+            username TEXT NOT NULL DEFAULT '',
+            first_name TEXT NOT NULL DEFAULT '',
+            last_name TEXT NOT NULL DEFAULT '',
+            message_count BIGINT NOT NULL DEFAULT 0,
+            first_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            last_message_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (chat_id, telegram_id)
+        );
+        """
+    )
+    await pool.execute(
+        """
+        CREATE TABLE IF NOT EXISTS paris_group_activity_daily (
+            chat_id BIGINT NOT NULL,
+            telegram_id BIGINT NOT NULL,
+            activity_date DATE NOT NULL DEFAULT CURRENT_DATE,
+            message_count BIGINT NOT NULL DEFAULT 0,
+            PRIMARY KEY (chat_id, telegram_id, activity_date)
+        );
+        """
+    )
+    await pool.execute(
+        """
+        CREATE INDEX IF NOT EXISTS paris_group_activity_count_idx
+        ON paris_group_activity (chat_id, message_count DESC, last_message_at DESC);
+        """
+    )
+    await pool.execute(
+        """
+        CREATE INDEX IF NOT EXISTS paris_group_activity_daily_idx
+        ON paris_group_activity_daily (chat_id, activity_date DESC, message_count DESC);
+        """
+    )
     _activity_tables_ready = True
 
 
@@ -144,12 +132,30 @@ async def track_activity_message(update: Update, context: ContextTypes.DEFAULT_T
 
     pool: asyncpg.Pool = context.application.bot_data["pool"]
     await ensure_activity_tables(pool)
-    await upsert_user(pool, user.to_dict())
 
     username = str(user.username or "").strip()
     first_name = str(user.first_name or "").strip()
     last_name = str(user.last_name or "").strip()
+    language_code = str(user.language_code or "").strip() or None
     chat_title = str(chat.title or "").strip()
+
+    await pool.execute(
+        """
+        INSERT INTO paris_users (telegram_id, username, first_name, last_name, language_code)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (telegram_id) DO UPDATE SET
+            username = EXCLUDED.username,
+            first_name = EXCLUDED.first_name,
+            last_name = EXCLUDED.last_name,
+            language_code = EXCLUDED.language_code,
+            updated_at = NOW();
+        """,
+        int(user.id),
+        username or None,
+        first_name or None,
+        last_name or None,
+        language_code,
+    )
 
     await pool.execute(
         """
@@ -200,7 +206,7 @@ def _parse_activity_args(args: list[str]) -> tuple[str | None, int | None]:
         if not value:
             continue
         lowered = value.lower()
-        if lowered in {"today", "сегодня"}:
+        if lowered in {"today", "сегодня", "day", "день"}:
             days = 1
         elif lowered in {"week", "неделя"}:
             days = 7
@@ -219,13 +225,15 @@ async def _resolve_activity_target(pool: asyncpg.Pool, target: str) -> int | Non
     clean = target.strip()
     if not clean:
         return None
+    clean_username = clean.lstrip("@").lower()
+
     row = await find_user_by_identifier(pool, clean)
     if row is not None:
         return int(row["telegram_id"])
+
     if clean.isdigit():
         return int(clean)
 
-    clean_username = clean.lstrip("@").lower()
     row = await pool.fetchrow(
         """
         SELECT telegram_id
@@ -249,29 +257,26 @@ async def _fetch_activity_top(
     limit: int = 20,
 ) -> list[asyncpg.Record]:
     if days is None:
-        return list(
-            await pool.fetch(
-                """
-                SELECT
-                    telegram_id,
-                    max(username) AS username,
-                    max(first_name) AS first_name,
-                    max(last_name) AS last_name,
-                    sum(message_count) AS total_messages,
-                    max(last_message_at) AS last_message_at
-                FROM paris_group_activity
-                WHERE ($1::BIGINT IS NULL OR chat_id = $1)
-                GROUP BY telegram_id
-                ORDER BY sum(message_count) DESC, max(last_message_at) DESC
-                LIMIT $2;
-                """,
-                chat_id,
-                limit,
-            )
+        rows = await pool.fetch(
+            """
+            SELECT
+                telegram_id,
+                max(username) AS username,
+                max(first_name) AS first_name,
+                max(last_name) AS last_name,
+                sum(message_count) AS total_messages,
+                max(last_message_at) AS last_message_at
+            FROM paris_group_activity
+            WHERE ($1::BIGINT IS NULL OR chat_id = $1)
+            GROUP BY telegram_id
+            ORDER BY sum(message_count) DESC, max(last_message_at) DESC
+            LIMIT $2;
+            """,
+            chat_id,
+            limit,
         )
-
-    return list(
-        await pool.fetch(
+    else:
+        rows = await pool.fetch(
             """
             SELECT
                 d.telegram_id,
@@ -293,7 +298,7 @@ async def _fetch_activity_top(
             days,
             limit,
         )
-    )
+    return list(rows)
 
 
 async def _fetch_user_activity(
@@ -322,7 +327,6 @@ async def _fetch_user_activity(
             chat_id,
             telegram_id,
         )
-
     return await pool.fetchrow(
         """
         SELECT
@@ -347,6 +351,20 @@ async def _fetch_user_activity(
     )
 
 
+def _activity_scope_text(chat_title: str | None, chat_id: int | None) -> str:
+    if chat_id is None:
+        return "все чаты"
+    return chat_title or "текущий чат"
+
+
+def _period_text(days: int | None) -> str:
+    if days is None:
+        return "все время"
+    if days == 1:
+        return "сегодня"
+    return f"последние {days} дн."
+
+
 async def activity_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     config: Config = context.application.bot_data["config"]
     pool: asyncpg.Pool = context.application.bot_data["pool"]
@@ -356,7 +374,7 @@ async def activity_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if message is None or user is None or chat is None:
         return
 
-    if not is_admin(config, user.id):
+    if not _is_admin(config, user.id):
         if chat.type == "private":
             await message.reply_text("нет доступа")
         return
@@ -364,9 +382,8 @@ async def activity_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await ensure_activity_tables(pool)
 
     target_raw, days = _parse_activity_args(context.args or [])
-    replied_user = message.reply_to_message.from_user if message.reply_to_message else None
-    if target_raw is None and replied_user is not None and not replied_user.is_bot:
-        target_raw = str(replied_user.id)
+    if target_raw is None and message.reply_to_message and message.reply_to_message.from_user:
+        target_raw = str(message.reply_to_message.from_user.id)
 
     current_chat_id = int(chat.id) if _is_group_chat(chat.type) else None
     chat_title = str(chat.title or "").strip() if current_chat_id is not None else None
@@ -377,7 +394,7 @@ async def activity_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await message.reply_text("игрок не найден в базе активности")
             return
         row = await _fetch_user_activity(pool, chat_id=current_chat_id, telegram_id=target_id, days=days)
-        if row is None or int(_row_value(row, "total_messages", 0) or 0) <= 0:
+        if row is None or int(row["total_messages"] or 0) <= 0:
             await message.reply_text(
                 "по этому игроку пока нет сообщений в выбранном периоде.\n\n"
                 "данные считаются только с момента включения активности."
@@ -386,11 +403,11 @@ async def activity_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         text = (
             "📊 <b>активность игрока</b>\n\n"
             f"<b>игрок:</b> {_safe_display_user(row)}\n"
-            f"<b>чат:</b> {escape(_scope_text(chat_title, current_chat_id))}\n"
+            f"<b>чат:</b> {escape(_activity_scope_text(chat_title, current_chat_id))}\n"
             f"<b>период:</b> {escape(_period_text(days))}\n"
-            f"<b>сообщений:</b> <code>{int(_row_value(row, 'total_messages', 0) or 0)}</code>\n"
-            f"<b>первое сообщение:</b> {escape(_format_dt(_row_value(row, 'first_message_at')))}\n"
-            f"<b>последнее сообщение:</b> {escape(_format_dt(_row_value(row, 'last_message_at')))}"
+            f"<b>сообщений:</b> <code>{int(row['total_messages'] or 0)}</code>\n"
+            f"<b>первое сообщение:</b> {escape(_format_dt(row['first_message_at']))}\n"
+            f"<b>последнее сообщение:</b> {escape(_format_dt(row['last_message_at']))}"
         )
         await message.reply_text(text, parse_mode=ParseMode.HTML)
         return
@@ -399,46 +416,65 @@ async def activity_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not rows:
         await message.reply_text(
             "пока нет данных активности.\n\n"
-            "важно: бот начнет считать обычные сообщения только если Privacy Mode выключен в BotFather."
+            "данные считаются только с момента включения функции."
         )
         return
 
     lines = [
         "📊 <b>активность игроков</b>",
         "",
-        f"<b>чат:</b> {escape(_scope_text(chat_title, current_chat_id))}",
+        f"<b>чат:</b> {escape(_activity_scope_text(chat_title, current_chat_id))}",
         f"<b>период:</b> {escape(_period_text(days))}",
         "",
     ]
     for index, row in enumerate(rows, start=1):
-        lines.append(
-            f"{index}. {_safe_display_user(row)} — <code>{int(_row_value(row, 'total_messages', 0) or 0)}</code>"
-        )
+        lines.append(f"{index}. {_safe_display_user(row)} — <code>{int(row['total_messages'] or 0)}</code>")
     lines.append("")
     lines.append("данные считаются с момента включения функции.")
     await message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
-def patch_activity_features(main_base_module: Any) -> None:
+async def group_start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    await message.reply_text(
+        "бот работает в группе.\n\n"
+        "для проверки напишите /ping\n"
+        "для активности напишите /activity\n\n"
+        "важно: обычные сообщения считаются только после отключения Privacy Mode и повторного добавления бота в группу."
+    )
+    raise ApplicationHandlerStop
+
+
+async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    await message.reply_text("pong. бот видит этот чат.")
+
+
+def patch_activity_features(main_base_module) -> None:
     if getattr(main_base_module.app.state, "activity_patch_installed", False):
         return
 
     original_build_application = main_base_module.build_application
-    original_set_bot_commands = main_base_module.set_bot_commands
 
-    def build_application_with_activity(config: Config, pool: asyncpg.Pool):
+    def wrapped_build_application(config, pool):
         telegram_app = original_build_application(config, pool)
-        telegram_app.add_handler(CommandHandler(["activity", "active"], activity_command), group=-2)
-        telegram_app.add_handler(MessageHandler(filters.ChatType.GROUPS, track_activity_message), group=20)
+        telegram_app.add_handler(CommandHandler("start", group_start_command, filters.ChatType.GROUPS), group=-50)
+        telegram_app.add_handler(CommandHandler("ping", ping_command), group=-49)
+        telegram_app.add_handler(CommandHandler(["activity", "active"], activity_command), group=-49)
+        telegram_app.add_handler(
+            MessageHandler(filters.ChatType.GROUPS & ~filters.StatusUpdate.ALL, track_activity_message),
+            group=50,
+        )
         return telegram_app
 
-    async def set_bot_commands_with_activity(app) -> None:
-        try:
-            await original_set_bot_commands(app)
-        except TypeError:
-            pass
-        await app.bot.set_my_commands(COMMANDS_WITH_ACTIVITY)
+    main_base_module.build_application = wrapped_build_application
 
-    main_base_module.build_application = build_application_with_activity
-    main_base_module.set_bot_commands = set_bot_commands_with_activity
+    async def wrapped_set_bot_commands(app):
+        await app.bot.set_my_commands(BASE_COMMANDS)
+
+    main_base_module.set_bot_commands = wrapped_set_bot_commands
     main_base_module.app.state.activity_patch_installed = True
