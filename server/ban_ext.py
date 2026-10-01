@@ -19,7 +19,6 @@ INACTIVE_EXCLUDED_USERNAMES = {
     "leya_666",
     "luka_vo1d",
     "communityr34",
-    "tvorog_t",
     "mimilset",
     "salamsister",
     "ilovekapebebra",
