@@ -38,6 +38,7 @@ INACTIVE_EXCLUDED_USERNAMES = (
     "ilovekapebebra",
     "sofiysheva",
     "sofiyusheva",
+    "pixel_are_you_okay",
 )
 
 
