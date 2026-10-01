@@ -21,10 +21,24 @@ app.include_router(warnings_ext_router)
 
 _test_application_cleanup_done = False
 _dead_luka_cleanup_done = False
+_inactive_exclusions_cleanup_done = False
 _leya_health_promotion_done = False
 _lona_army_promotion_done = False
 _kira_name_patch_done = False
 _derek_role_patch_done = False
+
+INACTIVE_EXCLUDED_USERNAMES = (
+    "limeksvins",
+    "leya_666",
+    "luka_vo1d",
+    "communityr34",
+    "tvorog_t",
+    "mimilset",
+    "salamsister",
+    "ilovekapebebra",
+    "sofiysheva",
+    "sofiyusheva",
+)
 
 
 @app.middleware("http")
@@ -86,6 +100,31 @@ async def remove_dead_luka_application_once(request, call_next):
                 """
             )
             _dead_luka_cleanup_done = True
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def exclude_inactive_users_once(request, call_next):
+    global _inactive_exclusions_cleanup_done
+    if not _inactive_exclusions_cleanup_done:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            await pool.execute(
+                """
+                UPDATE paris_applications AS a
+                SET
+                    status = 'rejected',
+                    owner_comment = 'исключен за бездействие',
+                    assigned_role = '',
+                    updated_at = NOW()
+                FROM paris_users AS u
+                WHERE a.telegram_id = u.telegram_id
+                  AND lower(COALESCE(u.username, '')) = ANY($1::text[])
+                  AND a.status <> 'rejected';
+                """,
+                list(INACTIVE_EXCLUDED_USERNAMES),
+            )
+            _inactive_exclusions_cleanup_done = True
     return await call_next(request)
 
 
