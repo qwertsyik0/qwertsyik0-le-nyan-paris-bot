@@ -22,6 +22,7 @@ app.include_router(warnings_ext_router)
 _test_application_cleanup_done = False
 _dead_luka_cleanup_done = False
 _inactive_exclusions_cleanup_done = False
+_tvorog_restore_done = False
 _leya_health_promotion_done = False
 _lona_army_promotion_done = False
 _kira_name_patch_done = False
@@ -32,7 +33,6 @@ INACTIVE_EXCLUDED_USERNAMES = (
     "leya_666",
     "luka_vo1d",
     "communityr34",
-    "tvorog_t",
     "mimilset",
     "salamsister",
     "ilovekapebebra",
@@ -126,6 +126,30 @@ async def exclude_inactive_users_once(request, call_next):
                 list(INACTIVE_EXCLUDED_USERNAMES),
             )
             _inactive_exclusions_cleanup_done = True
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def restore_tvorog_application_once(request, call_next):
+    global _tvorog_restore_done
+    if not _tvorog_restore_done:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            await pool.execute(
+                """
+                UPDATE paris_applications AS a
+                SET
+                    status = 'accepted',
+                    owner_comment = NULL,
+                    assigned_role = 'придворная музыкантка',
+                    affiliation = 'двор',
+                    updated_at = NOW()
+                FROM paris_users AS u
+                WHERE a.telegram_id = u.telegram_id
+                  AND lower(COALESCE(u.username, '')) = 'tvorog_t';
+                """
+            )
+            _tvorog_restore_done = True
     return await call_next(request)
 
 
