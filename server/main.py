@@ -140,7 +140,7 @@ async def restore_tvorog_application_once(request, call_next):
                 UPDATE paris_applications AS a
                 SET
                     status = 'accepted',
-                    owner_comment = NULL,
+                    owner_comment = 'восстановлена после ошибочного исключения',
                     assigned_role = 'придворная музыкантка',
                     affiliation = 'двор',
                     updated_at = NOW()
