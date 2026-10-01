@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from . import main_base as _main_base
+from .activity_ext import patch_activity_features
 from .admin_ext import router as admin_ext_router
 from .ban_ext import patch_banned_access
 from .cleanup_router import router as cleanup_router
@@ -13,6 +14,7 @@ patch_lenyan_broadcast(_main_base)
 patch_player_features(_main_base)
 patch_warning_features(_main_base)
 patch_banned_access(_main_base)
+patch_activity_features(_main_base)
 
 app.include_router(admin_ext_router)
 app.include_router(cleanup_router)
