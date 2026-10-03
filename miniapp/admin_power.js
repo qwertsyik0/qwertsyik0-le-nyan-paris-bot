@@ -578,6 +578,9 @@
     setTimeout(()=>searchPlayers({global:true}),500);
     setTimeout(()=>loadTemplates(),650);
     setTimeout(()=>loadDashboard(),750);
+    setTimeout(hideLegacy, 500);
+    setTimeout(hideLegacy, 1400);
+    setTimeout(hideLegacy, 3000);
     if (dashboardTimer) clearInterval(dashboardTimer);
     dashboardTimer=setInterval(decorateTabCounts,1500);
   }
