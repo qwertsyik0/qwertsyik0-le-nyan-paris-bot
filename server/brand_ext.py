@@ -8,6 +8,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppI
 from telegram.constants import ParseMode
 from telegram.ext import Application, ApplicationHandlerStop, CommandHandler, ContextTypes
 
+from .bot import mini_app_url
 from .config import Config
 
 PROJECT_TITLE = "L’Empire des Ombres"
@@ -17,8 +18,8 @@ PROJECT_SUBTITLE = "империя теней"
 def empire_menu_markup(config: Config) -> InlineKeyboardMarkup:
     buttons = []
     if config.mini_app_url:
-        buttons.append([InlineKeyboardButton("🜏 открыть кабинет", web_app=WebAppInfo(config.mini_app_url))])
-        buttons.append([InlineKeyboardButton("🌑 открыть Mini App", url=config.mini_app_url)])
+        buttons.append([InlineKeyboardButton("🜏 открыть кабинет", web_app=WebAppInfo(mini_app_url(config)))])
+        buttons.append([InlineKeyboardButton("🌑 открыть Mini App", url=mini_app_url(config))])
     return InlineKeyboardMarkup(buttons) if buttons else InlineKeyboardMarkup([])
 
 
