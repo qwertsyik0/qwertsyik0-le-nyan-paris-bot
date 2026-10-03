@@ -105,7 +105,7 @@
     if (!admin || adminInjected || document.getElementById("admin-warning-card")) return;
     adminInjected = true;
     admin.insertAdjacentHTML("beforeend", `
-      <article class="card" id="admin-warning-card">
+      <article class="card" id="admin-warning-card" data-admin-pane="warnings">
         <p class="eyebrow">дисциплина</p>
         <h2>предупреждения игрокам</h2>
         <div class="admin-warning-form">
