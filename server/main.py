@@ -26,6 +26,7 @@ app.include_router(admin_power_router)
 app.include_router(cleanup_router)
 app.include_router(player_features_router)
 app.include_router(warnings_ext_router)
+app.include_router(social_features_router)
 
 _test_application_cleanup_done = False
 _dead_luka_cleanup_done = False
