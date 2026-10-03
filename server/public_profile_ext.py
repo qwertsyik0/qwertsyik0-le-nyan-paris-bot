@@ -117,9 +117,9 @@ async def _resolve_target_id(pool: asyncpg.Pool, target_raw: str | None, reply_u
 def public_profile_text(row: Any | None, fallback_user: User | None = None) -> str:
     if row is None:
         return (
-            "🎭 <b>карточка персонажа</b>\n\n"
+            "🜏 <b>L’Empire des Ombres · карточка персонажа</b>\n\n"
             "публичная карточка не найдена.\n\n"
-            "возможные причины: игрок не принят, не запускал бота, исключен или еще не попал в базу."
+            "игрок может быть не принят, исключен, не запускал бота или еще не попал в базу."
         )
 
     player_status = str(value(row, "player_status", "active") or "active")
@@ -127,14 +127,15 @@ def public_profile_text(row: Any | None, fallback_user: User | None = None) -> s
     tag_line = ", ".join(row_tags) if row_tags else "—"
 
     return (
-        "🎭 <b>карточка персонажа</b>\n\n"
+        "🜏 <b>карточка персонажа</b>\n"
+        "<i>L’Empire des Ombres · Париж, 1808</i>\n\n"
         f"<b>игрок:</b> {escape(_display_user(row, fallback_user))}\n"
         f"<b>персонаж:</b> {escape(name(row))}\n"
         f"<b>роль:</b> {escape(role(row))}\n"
         f"<b>раздел:</b> {escape(str(value(row, 'affiliation', '—') or '—'))}\n"
         f"<b>статус:</b> {escape(PLAYER_STATUS_LABELS.get(player_status, player_status))}\n"
         f"<b>метки:</b> {escape(tag_line)}\n\n"
-        "<i>показывается только публичная карточка. полная анкета скрыта.</i>"
+        "<i>это публичная карточка. полная анкета остается доступна только в личном кабинете.</i>"
     )
 
 
