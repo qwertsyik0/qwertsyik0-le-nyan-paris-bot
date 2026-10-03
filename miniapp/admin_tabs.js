@@ -4,22 +4,22 @@
 
   const labels = {
     overview: "обзор",
-    applications: "анкеты",
     players: "игроки",
-    notes: "заметки",
+    applications: "анкеты",
     letters: "письма",
+    warnings: "предупр.",
+    notes: "заметки",
     templates: "шаблоны",
-    warnings: "предупреждения",
     logs: "журнал",
   };
-  const order = ["overview", "applications", "players", "notes", "letters", "templates", "warnings", "logs"];
+  const order = ["overview", "players", "applications", "letters", "warnings", "notes", "templates", "logs"];
   let current = "overview";
   let refreshTimer = null;
 
   const nav = document.createElement("div");
   nav.id = "admin-section-tabs";
   nav.className = "admin-section-tabs";
-  nav.innerHTML = '<div class="admin-section-tabs-title"><span>разделы админки</span></div><div class="admin-section-tabs-grid"></div>';
+  nav.innerHTML = '<div class="admin-section-tabs-grid"></div>';
   admin.insertBefore(nav, admin.firstChild);
 
   function panes() {
@@ -50,6 +50,9 @@
     nav.querySelectorAll("[data-admin-section]").forEach((button) => {
       button.classList.toggle("active", button.dataset.adminSection === current);
     });
+
+    admin.dataset.currentAdminPane = current;
+    document.dispatchEvent(new CustomEvent("adminpanechange", { detail: { pane: current } }));
   }
 
   function rebuild() {
@@ -59,7 +62,7 @@
 
     const grid = nav.querySelector(".admin-section-tabs-grid");
     grid.innerHTML = keys.map((key) =>
-      `<button type="button" class="admin-section-tab${key === current ? " active" : ""}" data-admin-section="${key}">${labels[key] || key}</button>`
+      `<button type="button" class="admin-section-tab${key === current ? " active" : ""}" data-admin-section="${key}"><span class="admin-section-label">${labels[key] || key}</span></button>`
     ).join("");
 
     applyVisibility();
@@ -70,7 +73,7 @@
     if (!button) return;
     current = button.dataset.adminSection;
     applyVisibility();
-    nav.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.scrollTo({ top: Math.max(0, admin.offsetTop - 8), behavior: "smooth" });
   });
 
   const observer = new MutationObserver(() => {
