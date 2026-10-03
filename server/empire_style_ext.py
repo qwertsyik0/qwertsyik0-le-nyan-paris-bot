@@ -8,30 +8,45 @@ from telegram import BotCommand, InlineKeyboardButton, InlineKeyboardMarkup, Upd
 from telegram.constants import ParseMode
 from telegram.ext import Application, ApplicationHandlerStop, CommandHandler, ContextTypes
 
-from .bot import CITY_SHEET_URL, EVENT_CHAT_URL
+from .bot import CITY_SHEET_URL
 from .config import Config
 from .player_features import PLAYER_STATUS_LABELS, name, role, tags, value
 from . import public_profile_ext
 
 PROJECT_TITLE = "L’Empire des Ombres"
 PROJECT_SUBTITLE = "Париж 1808 · империя теней"
+CACHE_TAG = "empire-20261003-2"
+
+
+def _cache_bust_url(url: str | None, fallback: str) -> str:
+    base = (url or fallback).strip()
+    if not base:
+        base = fallback
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}v={CACHE_TAG}"
+
+
+def _mini_app_url(config: Config) -> str:
+    return _cache_bust_url(config.mini_app_url, "https://qwertsyik0.github.io/le-nyan-paris/miniapp/")
+
+
+def _city_sheet_url() -> str:
+    return _cache_bust_url(CITY_SHEET_URL, "https://qwertsyik0.github.io/le-nyan-paris/")
 
 
 def _links_markup(config: Config) -> InlineKeyboardMarkup:
-    mini_app_url = config.mini_app_url or "https://qwertsyik0.github.io/le-nyan-paris/miniapp/"
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🕯 открыть кабинет", url=mini_app_url)],
-            [InlineKeyboardButton("📜 городской лист", url=CITY_SHEET_URL)],
+            [InlineKeyboardButton("🕯 открыть кабинет", url=_mini_app_url(config))],
+            [InlineKeyboardButton("📜 городской лист", url=_city_sheet_url())],
         ]
     )
 
 
 def _group_markup(config: Config) -> InlineKeyboardMarkup:
-    mini_app_url = config.mini_app_url or "https://qwertsyik0.github.io/le-nyan-paris/miniapp/"
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("🕯 кабинет", url=mini_app_url), InlineKeyboardButton("📜 лист", url=CITY_SHEET_URL)],
+            [InlineKeyboardButton("🕯 кабинет", url=_mini_app_url(config)), InlineKeyboardButton("📜 лист", url=_city_sheet_url())],
         ]
     )
 
