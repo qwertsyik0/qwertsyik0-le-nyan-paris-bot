@@ -413,3 +413,9 @@ body.section-menu-open { overflow: hidden; }
 @media (max-width: 620px) {
   .admin-section-tabs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* Clean selected admin pane */
+#admin-ext-panel > .section-head { display: none !important; }
+#admin-ext-panel > #admin-ext-message:empty { display: none !important; }
+#admin-ext-panel > #admin-ext-message:not(:empty) { margin-bottom: 10px; }
