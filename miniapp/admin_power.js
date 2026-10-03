@@ -10,7 +10,6 @@
   let currentPlayer = null;
   let selectedIds = new Set();
   let dashboardCounts = {};
-  let dashboardTimer = null;
 
   const statusLabels = {
     active: "активен",
@@ -578,11 +577,12 @@
     setTimeout(()=>searchPlayers({global:true}),500);
     setTimeout(()=>loadTemplates(),650);
     setTimeout(()=>loadDashboard(),750);
+    setTimeout(()=>loadDashboard(),2800);
     setTimeout(hideLegacy, 500);
     setTimeout(hideLegacy, 1400);
     setTimeout(hideLegacy, 3000);
-    if (dashboardTimer) clearInterval(dashboardTimer);
-    dashboardTimer=setInterval(decorateTabCounts,1500);
+    // Счётчики обновляются только после реальной загрузки данных.
+    // Постоянный interval здесь ломал фокус у select и вызывал мерцание.
   }
 
   boot();
