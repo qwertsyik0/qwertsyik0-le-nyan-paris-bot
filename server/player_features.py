@@ -315,7 +315,7 @@ def profile_text(row: Any | None, unread: int = 0) -> str:
     player_status = str(value(row, "player_status", "active") or "active")
     row_tags = tags(value(row, "story_tags"))
     return (
-        "👤 <b>мой профиль Le Nyan Paris</b>\n\n"
+        "👤 <b>мой профиль L’Empire des Ombres</b>\n\n"
         f"<b>персонаж:</b> {escape(name(row))}\n"
         f"<b>роль:</b> {escape(role(row))}\n"
         f"<b>раздел:</b> {escape(str(value(row, 'affiliation', '—') or '—'))}\n"
