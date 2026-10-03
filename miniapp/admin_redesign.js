@@ -195,7 +195,10 @@
       const open = !detail.classList.contains("hidden");
       document.body.classList.toggle("admin-player-sheet-open", open);
     };
-    new MutationObserver(sync).observe(detail, { attributes: true, attributeFilter: ["class"] });
+    if (!detail.dataset.sheetObserverReady) {
+      detail.dataset.sheetObserverReady = "1";
+      new MutationObserver(sync).observe(detail, { attributes: true, attributeFilter: ["class"] });
+    }
     sync();
   }
 
@@ -256,12 +259,6 @@
 
   const screenObserver = new MutationObserver(markMode);
   screenObserver.observe(admin, { attributes: true, attributeFilter: ["class"] });
-
-  const childObserver = new MutationObserver(() => {
-    clearTimeout(window.__adminRedesignTimer);
-    window.__adminRedesignTimer = setTimeout(refreshLayout, 80);
-  });
-  childObserver.observe(admin, { childList: true, subtree: false });
 
   refreshLayout();
   setTimeout(refreshLayout, 600);
