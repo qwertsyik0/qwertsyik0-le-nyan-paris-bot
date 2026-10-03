@@ -39,7 +39,7 @@
     const extPanel = admin.querySelector("#admin-ext-panel");
     if (extPanel) {
       const hasVisibleNestedPane = [...extPanel.querySelectorAll(":scope > [data-admin-pane]")]
-        .some((pane) => pane.dataset.adminPane === current);
+        .some((pane) => pane.dataset.adminPane === current && !pane.classList.contains("power-replaced"));
       extPanel.classList.toggle("admin-pane-hidden", !hasVisibleNestedPane);
     }
 
