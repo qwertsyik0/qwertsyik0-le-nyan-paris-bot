@@ -13,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from telegram import MenuButtonWebApp, Update, WebAppInfo
 from telegram.constants import ParseMode
 
-from .bot import CITY_SHEET_URL, EVENT_CHAT_URL, build_application, notify_admins_about_application, set_bot_commands
+from .bot import CITY_SHEET_URL, EVENT_CHAT_URL, build_application, mini_app_url, notify_admins_about_application, set_bot_commands
 from .config import Config, get_config
 from .db import (
     count_unread_letters,
@@ -173,7 +173,7 @@ def _letter_notification_text(title: str, letter_type: str, body: str) -> str:
     clean_title = title.strip() or type_label
     return (
         f"{icon} <b>{escape(clean_title)}</b>\n\n"
-        f"<i>тип: {escape(type_label)} • от императорской канцелярии Le Nyan Paris</i>\n\n"
+        f"<i>тип: {escape(type_label)} • от императорской канцелярии L’Empire des Ombres</i>\n\n"
         f"<blockquote>{escape(body).strip()}</blockquote>\n\n"
         "<b>сообщение сохранено в разделе «письма» вашего кабинета.</b>"
     )
@@ -186,7 +186,7 @@ async def configure_menu_button(telegram_app, config: Config) -> None:
         await telegram_app.bot.set_chat_menu_button(
             menu_button=MenuButtonWebApp(
                 text="Кабинет",
-                web_app=WebAppInfo(url=config.mini_app_url),
+                web_app=WebAppInfo(url=mini_app_url(config)),
             )
         )
     except Exception as exc:
@@ -229,7 +229,7 @@ async def lifespan(app: FastAPI):
         await pool.close()
 
 
-app = FastAPI(title="Le Nyan Paris Bot", lifespan=lifespan)
+app = FastAPI(title="L’Empire des Ombres Bot", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://qwertsyik0.github.io"],
