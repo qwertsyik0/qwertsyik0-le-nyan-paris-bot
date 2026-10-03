@@ -41,15 +41,16 @@
     // Дубли одиночной отправки и старой hard-admin рассылки убираем:
     // индивидуальное письмо теперь запускается из карточки игрока,
     // массовые письма остаются отдельным нормальным блоком.
-    document.getElementById("hard-admin-panels")?.classList.add("admin-layout-hidden");
     [...admin.querySelectorAll('#admin-ext-panel > [data-admin-pane="letters"]')].forEach((node) => {
       const text = String(node.textContent || "").toLowerCase();
       if (text.includes("отправка письма")) node.classList.add("admin-layout-hidden");
     });
 
     // Один рабочий блок предупреждений вместо нескольких одинаковых.
-    document.getElementById("admin-warning-card")?.classList.add("admin-layout-hidden");
-    document.getElementById("hard-warning-admin-card")?.classList.add("admin-layout-hidden");
+    if (document.getElementById("feature-admin-warnings")) {
+      document.getElementById("admin-warning-card")?.classList.add("admin-layout-hidden");
+      document.getElementById("hard-warning-admin-card")?.classList.add("admin-layout-hidden");
+    }
   }
 
   function buildDashboard() {
@@ -160,7 +161,9 @@
       targeted.classList.add("admin-primary-card");
     }
 
-    const warning = document.getElementById("feature-admin-warnings");
+    const warning = document.getElementById("feature-admin-warnings")
+      || document.getElementById("hard-warning-admin-card")
+      || document.getElementById("admin-warning-card");
     if (warning) {
       warning.classList.add("admin-primary-card");
       const warningPanes = [...admin.querySelectorAll('[data-admin-pane="warnings"]')].filter((x) => x !== warning && !x.classList.contains("admin-layout-hidden"));
