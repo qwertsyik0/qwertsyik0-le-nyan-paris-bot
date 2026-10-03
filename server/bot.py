@@ -25,6 +25,13 @@ waiting_admin_actions: dict[int, WaitingAction] = {}
 
 EVENT_CHAT_URL = "https://t.me/+gB1sMZBd5Lo4YjQy"
 CITY_SHEET_URL = "https://qwertsyik0.github.io/le-nyan-paris/"
+MINIAPP_CACHE_TAG = "empire-20261003-3"
+
+
+def mini_app_url(config: Config) -> str:
+    base = (config.mini_app_url or "https://qwertsyik0.github.io/le-nyan-paris/miniapp/").strip()
+    separator = "&" if "?" in base else "?"
+    return f"{base}{separator}v={MINIAPP_CACHE_TAG}"
 
 LETTER_STATUS_LABELS = {
     "new": "новое",
@@ -73,7 +80,7 @@ def application_summary(row: Any) -> str:
     status = value(row, "status", "—")
     assigned_role = value(row, "assigned_role") or value(row, "owner_comment") or "—"
     return (
-        "📋 <b>анкета Le Nyan Paris</b>\n\n"
+        "📋 <b>анкета L’Empire des Ombres</b>\n\n"
         f"<b>ID:</b> {value(row, 'id')}\n"
         f"<b>статус:</b> {escape(str(status))}\n"
         f"<b>игрок:</b> {escape(username_line(row))}\n"
@@ -110,7 +117,7 @@ def accepted_notification_text(role: str) -> str:
         "📜 <b>от императорской канцелярии</b>\n\n"
         "многоуважаемый участник,\n\n"
         "спешим уведомить вас, что поданная вами анкета была рассмотрена и одобрена.\n\n"
-        "вы приняты в число участников <b>Le Nyan Paris</b> и внесены в городской реестр.\n\n"
+        "вы приняты в число участников <b>L’Empire des Ombres</b> и внесены в городской реестр.\n\n"
         f"<b>назначенная роль:</b>\n{escape(role)}\n\n"
         f"<b>чат события:</b>\n{EVENT_CHAT_URL}\n\n"
         f"<b>городской лист парижа:</b>\n{CITY_SHEET_URL}\n\n"
@@ -125,7 +132,7 @@ def letter_notification_text(body: str) -> str:
     safe_body = escape(body).strip()
     return (
         "📜 <b>вам доставлено письмо</b>\n\n"
-        "<i>от императорской канцелярии Le Nyan Paris</i>\n\n"
+        "<i>от императорской канцелярии L’Empire des Ombres</i>\n\n"
         f"<blockquote>{safe_body}</blockquote>\n\n"
         "<b>письмо сохранено в разделе «письма» вашего кабинета.</b>"
     )
@@ -176,8 +183,8 @@ def application_decision_markup(application_id: int) -> InlineKeyboardMarkup:
 def main_menu_markup(config: Config) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("📜 подать анкету", web_app=WebAppInfo(config.mini_app_url))],
-            [InlineKeyboardButton("🌐 открыть Mini App", url=config.mini_app_url)],
+            [InlineKeyboardButton("📜 подать анкету", web_app=WebAppInfo(mini_app_url(config)))],
+            [InlineKeyboardButton("🌐 открыть Mini App", url=mini_app_url(config))],
         ]
     )
 
@@ -197,7 +204,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if message is None:
         return
     text = (
-        "📜 <b>Le Nyan Paris</b>\n\n"
+        "📜 <b>L’Empire des Ombres</b>\n\n"
         "это императорская канцелярия проекта.\n"
         "через бота можно подать анкету и получать важные уведомления по роли."
     )
@@ -225,7 +232,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not is_admin(config, user_id):
         await message.reply_text(admin_denied_text(user_id), parse_mode=ParseMode.HTML)
         return
-    await message.reply_text("админ-панель Le Nyan Paris", reply_markup=admin_menu_markup())
+    await message.reply_text("админ-панель L’Empire des Ombres", reply_markup=admin_menu_markup())
 
 
 async def pending_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
