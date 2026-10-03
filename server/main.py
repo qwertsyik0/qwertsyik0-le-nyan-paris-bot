@@ -127,7 +127,13 @@ async def exclude_inactive_users_once(request, call_next):
                     updated_at = NOW()
                 FROM paris_users AS u
                 WHERE a.telegram_id = u.telegram_id
-                  AND lower(COALESCE(u.username, '')) = ANY($1::text[])
+                  AND (
+                    lower(COALESCE(u.username, '')) = ANY($1::text[])
+                    OR (
+                      lower(COALESCE(a.character_first_name, '')) LIKE 'долорес%'
+                      AND lower(COALESCE(a.character_last_name, '')) = 'салье'
+                    )
+                  )
                   AND a.status <> 'rejected';
                 """,
                 list(INACTIVE_EXCLUDED_USERNAMES),
