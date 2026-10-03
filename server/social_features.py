@@ -72,6 +72,7 @@ def _clean(value: Any, limit: int, required: bool = False) -> str:
 
 async def ensure_social_schema(pool: asyncpg.Pool) -> None:
     async with pool.acquire() as conn:
+        await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS player_status TEXT NOT NULL DEFAULT 'active';")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS paris_coplay_requests (
