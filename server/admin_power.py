@@ -74,6 +74,22 @@ async def _admin_body(request: Request) -> tuple[Config, asyncpg.Pool, dict[str,
 
 async def ensure_power_schema(pool: asyncpg.Pool) -> None:
     async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS paris_letter_templates (
+                id BIGSERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                letter_type TEXT NOT NULL DEFAULT 'letter',
+                title TEXT NOT NULL DEFAULT '',
+                body TEXT NOT NULL,
+                created_by BIGINT,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                is_favorite BOOLEAN NOT NULL DEFAULT FALSE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
         await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS player_status TEXT NOT NULL DEFAULT 'active';")
         await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS story_tags TEXT[] NOT NULL DEFAULT '{}'::TEXT[];")
         await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS status_reason TEXT NOT NULL DEFAULT '';")
