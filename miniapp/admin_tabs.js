@@ -83,4 +83,5 @@
   setTimeout(rebuild, 450);
   setTimeout(rebuild, 1200);
   setTimeout(rebuild, 2600);
+  document.addEventListener("socialadminready", rebuild);
 })();
