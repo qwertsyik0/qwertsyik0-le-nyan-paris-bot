@@ -6,6 +6,7 @@
     home: "главная",
     application: "анкета",
     profile: "профиль",
+    game: "игра",
     status: "статус",
     letters: "письма",
     guide: "правила",
