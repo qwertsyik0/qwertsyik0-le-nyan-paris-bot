@@ -11,6 +11,7 @@ from .lenyan_ext import patch_lenyan_broadcast
 from .main_base import app
 from .player_features import patch_player_features, router as player_features_router
 from .public_profile_ext import patch_public_profile_features
+from .social_features import router as social_features_router
 from .warnings_ext import patch_warning_features, router as warnings_ext_router
 
 patch_lenyan_broadcast(_main_base)
