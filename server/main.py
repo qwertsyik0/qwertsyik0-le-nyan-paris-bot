@@ -34,6 +34,7 @@ _lona_army_promotion_done = False
 _kira_name_patch_done = False
 _derek_role_patch_done = False
 _core_roles_sync_done = False
+_loli_voluntary_exit_done = False
 
 INACTIVE_EXCLUDED_USERNAMES = (
     "limeksvins",
@@ -139,6 +140,30 @@ async def exclude_inactive_users_once(request, call_next):
                 list(INACTIVE_EXCLUDED_USERNAMES),
             )
             _inactive_exclusions_cleanup_done = True
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def mark_loli_voluntary_exit_once(request, call_next):
+    global _loli_voluntary_exit_done
+    if not _loli_voluntary_exit_done:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            await pool.execute(
+                """
+                UPDATE paris_applications AS a
+                SET
+                    status = 'rejected',
+                    owner_comment = 'вышла по с/ж',
+                    assigned_role = '',
+                    player_status = 'left',
+                    updated_at = NOW()
+                FROM paris_users AS u
+                WHERE a.telegram_id = u.telegram_id
+                  AND lower(COALESCE(u.username, '')) = 'loli_rose3';
+                """
+            )
+            _loli_voluntary_exit_done = True
     return await call_next(request)
 
 
