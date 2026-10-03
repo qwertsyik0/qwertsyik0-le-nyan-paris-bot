@@ -3,6 +3,7 @@ from __future__ import annotations
 from . import main_base as _main_base
 from .activity_ext import patch_activity_features
 from .admin_ext import router as admin_ext_router
+from .admin_power import router as admin_power_router
 from .ban_ext import patch_banned_access
 from .brand_ext import patch_brand_features
 from .cleanup_router import router as cleanup_router
@@ -21,6 +22,7 @@ patch_public_profile_features(_main_base)
 patch_brand_features(_main_base)
 
 app.include_router(admin_ext_router)
+app.include_router(admin_power_router)
 app.include_router(cleanup_router)
 app.include_router(player_features_router)
 app.include_router(warnings_ext_router)
