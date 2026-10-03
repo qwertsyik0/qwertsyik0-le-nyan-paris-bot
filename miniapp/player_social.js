@@ -349,6 +349,7 @@
     panel.id = "admin-npc-panel";
     panel.className = "card admin-primary-card";
     panel.dataset.adminPane = "npc";
+    if ((admin.dataset.currentAdminPane || "overview") !== "npc") panel.classList.add("admin-pane-hidden");
     panel.innerHTML = `
       <div class="section-head">
         <div><p class="eyebrow">заявки участников</p><h2>NPC</h2></div>
