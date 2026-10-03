@@ -979,3 +979,55 @@ body.admin-mode .section-menu-button b { display:none; }
     max-height:none;
   }
 }
+
+
+/* Admin section reliability + collapsible letter archive */
+#tab-admin .admin-pane-hidden,
+#tab-admin [aria-hidden="true"][data-admin-pane] {
+  display: none !important;
+}
+
+#tab-admin .letters-list-collapsed {
+  display: none !important;
+}
+
+#tab-admin .letters-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+#tab-admin .letters-collapse-toggle {
+  min-width: 126px;
+}
+
+#tab-admin [data-admin-essential="warnings"],
+#tab-admin [data-admin-essential="group-mail"] {
+  border-color: var(--line2) !important;
+}
+
+#tab-admin [data-admin-essential="group-mail"] textarea,
+#tab-admin [data-admin-essential="warnings"] textarea {
+  min-height: 96px;
+}
+
+@media (max-width: 520px) {
+  #tab-admin .letters-head-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  #tab-admin .letters-head-actions > button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  #tab-admin [data-admin-essential="group-mail"] .grid.two,
+  #tab-admin [data-admin-essential="warnings"] .grid.two,
+  #tab-admin [data-admin-essential="group-mail"] .hard-row,
+  #tab-admin [data-admin-essential="warnings"] .hard-row {
+    grid-template-columns: 1fr !important;
+  }
+}
