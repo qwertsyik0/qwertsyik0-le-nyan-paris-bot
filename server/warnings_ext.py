@@ -129,10 +129,11 @@ async def list_user_warnings(pool: asyncpg.Pool, telegram_id: int, *, include_re
 def warning_notification_text(warning_type: str, reason: str) -> str:
     label = WARNING_TYPE_LABELS.get(warning_type, warning_type)
     return (
-        "⚠️ <b>вам выдано предупреждение</b>\n\n"
+        "⚠️ <b>предупреждение Имперской канцелярии</b>\n"
+        "<i>L’Empire des Ombres</i>\n\n"
         f"<b>тип:</b> {escape(label)}\n"
         f"<b>причина:</b>\n{escape(reason)}\n\n"
-        "<i>запись сохранена в разделе «предупреждения» вашего личного кабинета.</i>"
+        "<i>запись внесена в личное дело и доступна в вашем кабинете.</i>"
     )
 
 
