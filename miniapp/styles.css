@@ -1031,3 +1031,102 @@ body.admin-mode .section-menu-button b { display:none; }
     grid-template-columns: 1fr !important;
   }
 }
+
+
+/* Participant social tools: co-player search + NPC */
+.social-card { overflow: visible !important; }
+.social-form { display:grid; gap:10px; }
+.social-subhead {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+.social-subhead h3 { margin:0; }
+.social-list { display:grid; gap:8px; }
+.social-item {
+  display:grid;
+  gap:8px;
+  padding:11px;
+  border:1px solid var(--line);
+  border-radius:15px;
+  background:rgba(255,255,255,.025);
+}
+.social-item.own {
+  border-color:var(--line2);
+  background:rgba(240,207,122,.055);
+}
+.social-item-head {
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:flex-start;
+}
+.social-item-head > div { min-width:0; display:grid; gap:2px; }
+.social-item-head b { font-size:14px; }
+.social-item-head span { font-size:11px; color:var(--muted); }
+.social-status {
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  min-height:26px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(240,207,122,.08);
+  color:var(--gold)!important;
+  font-size:9px!important;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.social-status.status-new { color:var(--warn)!important; }
+.social-status.status-in_work { color:var(--gold)!important; }
+.social-status.status-done { color:var(--good)!important; }
+.social-status.status-rejected,
+.social-status.status-cancelled { color:var(--bad)!important; }
+.social-meta {
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px 10px;
+  color:var(--muted);
+  font-size:10px;
+}
+.social-item p {
+  margin:0!important;
+  white-space:pre-wrap;
+  font-size:12px;
+}
+.social-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+}
+.social-actions .small { min-height:38px; }
+.social-admin-comment {
+  padding:8px 10px;
+  border-left:2px solid var(--gold2);
+  border-radius:0 10px 10px 0;
+  background:rgba(240,207,122,.055);
+  color:var(--text2);
+  font-size:11px;
+}
+.disabled-action { opacity:.58; }
+#tab-game textarea { min-height:88px; }
+#admin-npc-panel textarea { min-height:74px; }
+.admin-npc-filter { max-width:260px; }
+.admin-npc-actions {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+.admin-npc-actions button { width:100%; }
+
+@media(max-width:520px){
+  #tab-game .grid.two { grid-template-columns:1fr; }
+  .social-item-head { align-items:flex-start; }
+  .social-status { max-width:42%; text-align:center; justify-content:center; }
+  .admin-npc-actions { grid-template-columns:1fr; }
+}
