@@ -192,7 +192,7 @@
     const admin = document.getElementById("tab-admin");
     if (!admin || document.getElementById("feature-admin-players")) return;
     admin.insertAdjacentHTML("beforeend", `
-      <article class="card feature-panel" id="feature-admin-players">
+      <article class="card feature-panel" id="feature-admin-players" data-admin-pane="players">
         <div class="section-head"><div><p class="eyebrow">реестр из базы</p><h2>принятые участники</h2></div><button id="players-refresh" class="small" type="button">обновить</button></div>
         <div class="grid two">
           <input id="players-search" placeholder="поиск по юзу, имени, роли">
@@ -201,7 +201,7 @@
         <div id="players-message" class="message"></div>
         <div id="players-list" class="feature-list"></div>
       </article>
-      <article class="card feature-panel">
+      <article class="card feature-panel" data-admin-pane="letters">
         <p class="eyebrow">массовые письма</p><h2>рассылка по разделам</h2>
         <div class="grid two"><select id="group-letter-target"><option value="all">всем</option><option>двор</option><option>суд</option><option>полиция</option><option>армия</option><option>пресса</option><option>медицина</option><option>церковь</option><option>город</option><option>подполье</option><option>рынок</option></select><select id="group-letter-type"><option value="letter">письмо</option><option value="summons">повестка</option><option value="task">задание</option><option value="rumor">слух</option><option value="warning">предупреждение</option></select></div>
         <input id="group-letter-title" placeholder="заголовок">
@@ -209,7 +209,7 @@
         <button id="group-letter-send" class="primary wide" type="button">отправить</button>
         <div id="group-letter-message" class="message"></div>
       </article>
-      <article class="card feature-panel" id="feature-admin-warnings">
+      <article class="card feature-panel" id="feature-admin-warnings" data-admin-pane="warnings">
         <p class="eyebrow">дисциплина</p><h2>выдать предупреждение</h2>
         <div class="grid two">
           <input id="admin-warning-target" placeholder="@username или Telegram ID">
