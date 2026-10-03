@@ -295,7 +295,7 @@
     if (warningFirst) admin.insertBefore(warningPane, warningFirst);
 
     const targeted = document.getElementById("power-targeted-mail");
-    if (groupPane && targeted && groupPane !== targeted) {
+    if (groupPane && targeted && groupPane !== targeted && targeted.nextElementSibling !== groupPane) {
       targeted.after(groupPane);
     }
   }
@@ -311,14 +311,29 @@
 
   document.addEventListener("adminpanechange", () => setTimeout(syncPaneVisibility, 0));
 
-  const observer = new MutationObserver(() => {
-    clearTimeout(window.__adminSectionsFixTimer);
-    window.__adminSectionsFixTimer = setTimeout(ensure, 50);
-  });
-  observer.observe(admin, { childList: true, subtree: true });
+  function adminFieldIsActive() {
+    const element = document.activeElement;
+    return Boolean(
+      element
+      && admin.contains(element)
+      && ["INPUT", "SELECT", "TEXTAREA"].includes(element.tagName)
+    );
+  }
 
+  function safeEnsure() {
+    if (adminFieldIsActive()) {
+      // Никогда не перестраиваем админку, пока пользователь выбирает
+      // пункт select или печатает в поле.
+      setTimeout(safeEnsure, 400);
+      return;
+    }
+    ensure();
+  }
+
+  // Нужные старые модули догружаются чуть позже. Проверяем их только
+  // несколько раз на старте, без бесконечного MutationObserver.
   ensure();
-  setTimeout(ensure, 500);
-  setTimeout(ensure, 1500);
-  setTimeout(ensure, 3400);
+  setTimeout(safeEnsure, 550);
+  setTimeout(safeEnsure, 1500);
+  setTimeout(safeEnsure, 3000);
 })();
