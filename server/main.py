@@ -5,6 +5,7 @@ from .activity_ext import patch_activity_features
 from .admin_ext import router as admin_ext_router
 from .ban_ext import patch_banned_access
 from .cleanup_router import router as cleanup_router
+from .empire_style_ext import patch_empire_style
 from .lenyan_ext import patch_lenyan_broadcast
 from .main_base import app
 from .player_features import patch_player_features, router as player_features_router
@@ -17,6 +18,7 @@ patch_warning_features(_main_base)
 patch_banned_access(_main_base)
 patch_activity_features(_main_base)
 patch_public_profile_features(_main_base)
+patch_empire_style(_main_base)
 
 app.include_router(admin_ext_router)
 app.include_router(cleanup_router)
