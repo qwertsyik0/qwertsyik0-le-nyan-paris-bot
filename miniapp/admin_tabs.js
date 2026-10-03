@@ -14,7 +14,6 @@
   };
   const order = ["overview", "players", "applications", "letters", "warnings", "notes", "templates", "logs"];
   let current = "overview";
-  let refreshTimer = null;
 
   const nav = document.createElement("div");
   nav.id = "admin-section-tabs";
@@ -76,11 +75,11 @@
     window.scrollTo({ top: Math.max(0, admin.offsetTop - 8), behavior: "smooth" });
   });
 
-  const observer = new MutationObserver(() => {
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(rebuild, 60);
-  });
-  observer.observe(admin, { childList: true });
-
   rebuild();
+  // Поздние модули Mini App монтируются после основного HTML.
+  // Обновляем список вкладок несколько раз только при старте,
+  // а не следим за DOM бесконечно.
+  setTimeout(rebuild, 450);
+  setTimeout(rebuild, 1200);
+  setTimeout(rebuild, 2600);
 })();
