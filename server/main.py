@@ -33,6 +33,7 @@ _leya_health_promotion_done = False
 _lona_army_promotion_done = False
 _kira_name_patch_done = False
 _derek_role_patch_done = False
+_core_roles_sync_done = False
 
 INACTIVE_EXCLUDED_USERNAMES = (
     "limeksvins",
@@ -225,6 +226,52 @@ async def rename_kira_application_once(request, call_next):
                 """
             )
             _kira_name_patch_done = True
+    return await call_next(request)
+
+
+
+
+@app.middleware("http")
+async def sync_core_roles_once(request, call_next):
+    global _core_roles_sync_done
+    if not _core_roles_sync_done:
+        pool = getattr(request.app.state, "pool", None)
+        if pool is not None:
+            await pool.execute(
+                """
+                UPDATE paris_applications AS a
+                SET
+                    assigned_role = CASE lower(COALESCE(u.username, ''))
+                        WHEN 'qwertsyiks' THEN 'Император'
+                        WHEN 'ad_15_03' THEN 'комендант Имперской тюрьмы'
+                        WHEN 'cladkayavata3_3' THEN 'первый председатель Императорского суда Парижа'
+                        WHEN 'ewq1k' THEN 'главная распорядительница военного ведомства Парижа'
+                        WHEN 'ceniora_vanil' THEN 'мелкий информатор'
+                        ELSE a.assigned_role
+                    END,
+                    affiliation = CASE lower(COALESCE(u.username, ''))
+                        WHEN 'qwertsyiks' THEN 'двор'
+                        WHEN 'ad_15_03' THEN 'полиция'
+                        WHEN 'cladkayavata3_3' THEN 'суд'
+                        WHEN 'ewq1k' THEN 'армия'
+                        WHEN 'ceniora_vanil' THEN 'подполье'
+                        ELSE a.affiliation
+                    END,
+                    updated_at = NOW()
+                FROM paris_users AS u
+                WHERE a.telegram_id = u.telegram_id
+                  AND a.status = 'accepted'
+                  AND lower(COALESCE(u.username, '')) = ANY($1::text[]);
+                """,
+                [
+                    "qwertsyiks",
+                    "ad_15_03",
+                    "cladkayavata3_3",
+                    "ewq1k",
+                    "ceniora_vanil",
+                ],
+            )
+            _core_roles_sync_done = True
     return await call_next(request)
 
 
