@@ -159,7 +159,7 @@
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(rebuild, 80);
   });
-  observer.observe(admin, { childList: true, subtree: true });
+  observer.observe(admin, { childList: true });
 
   rebuild();
 })();
