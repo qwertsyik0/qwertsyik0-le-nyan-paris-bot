@@ -8,11 +8,12 @@
     applications: "анкеты",
     letters: "письма",
     warnings: "предупр.",
+    npc: "NPC",
     notes: "заметки",
     templates: "шаблоны",
     logs: "журнал",
   };
-  const order = ["overview", "players", "applications", "letters", "warnings", "notes", "templates", "logs"];
+  const order = ["overview", "players", "applications", "npc", "letters", "warnings", "notes", "templates", "logs"];
   let current = "overview";
 
   const nav = document.createElement("div");
