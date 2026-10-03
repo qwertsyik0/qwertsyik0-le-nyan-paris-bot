@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from html import escape
+import re
+import secrets
 from typing import Any
 
 import asyncpg
@@ -209,6 +211,99 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "через бота можно подать анкету и получать важные уведомления по роли."
     )
     await message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=main_menu_markup(config))
+
+
+ROLL_RE = re.compile(r"^(?:(\d{1,2})d(\d{1,4})|d(\d{1,4})|(\d{1,4}))$", re.IGNORECASE)
+
+
+def _parse_roll(raw: str) -> tuple[int, int]:
+    token = (raw or "").strip().lower()
+    if not token:
+        return 1, 20
+
+    match = ROLL_RE.fullmatch(token)
+    if not match:
+        raise ValueError("формат: /roll, /roll d20, /roll 2d6 или /roll 100")
+
+    if match.group(1) and match.group(2):
+        count = int(match.group(1))
+        sides = int(match.group(2))
+    elif match.group(3):
+        count = 1
+        sides = int(match.group(3))
+    else:
+        count = 1
+        sides = int(match.group(4))
+
+    if count < 1 or count > 20:
+        raise ValueError("можно бросить от 1 до 20 кубов за раз")
+    if sides < 2 or sides > 1000:
+        raise ValueError("у куба может быть от 2 до 1000 граней")
+
+    return count, sides
+
+
+async def roll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    user = update.effective_user
+    if message is None or user is None:
+        return
+
+    args = list(context.args or [])
+    expression = "d20"
+    comment = ""
+
+    if args:
+        expression = args[0]
+        comment = " ".join(args[1:]).strip()
+
+    if expression.lower() in {"help", "помощь"}:
+        await message.reply_text(
+            "🎲 <b>ролл</b>\n\n"
+            "<code>/roll</code> — d20\n"
+            "<code>/roll d100</code> — один d100\n"
+            "<code>/roll 2d6</code> — два d6\n"
+            "<code>/roll d20 скрытность</code> — бросок с подписью",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    try:
+        count, sides = _parse_roll(expression)
+    except ValueError as exc:
+        await message.reply_text(
+            f"🎲 {escape(str(exc))}\n\n"
+            "пример: <code>/roll 2d6 атака</code>",
+            parse_mode=ParseMode.HTML,
+        )
+        return
+
+    rolls = [secrets.randbelow(sides) + 1 for _ in range(count)]
+    total = sum(rolls)
+    formula = f"{count}d{sides}" if count != 1 else f"d{sides}"
+
+    name = escape(user.full_name or user.username or str(user.id))
+    player = f'<a href="tg://user?id={user.id}">{name}</a>'
+
+    if count == 1:
+        result_line = f"<b>{rolls[0]}</b> / {sides}"
+    else:
+        details = " + ".join(str(value) for value in rolls)
+        result_line = f"{escape(details)} = <b>{total}</b>"
+
+    extra = f"\n📝 {escape(comment[:300])}" if comment else ""
+    text = (
+        "🎲 <b>бросок кубика</b>\n"
+        f"{player}\n\n"
+        f"<code>{escape(formula)}</code> → {result_line}"
+        f"{extra}"
+    )
+
+    await message.reply_text(
+        text,
+        parse_mode=ParseMode.HTML,
+        disable_web_page_preview=True,
+    )
 
 
 async def id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -616,6 +711,7 @@ async def set_bot_commands(app: Application) -> None:
         [
             BotCommand("start", "открыть канцелярию"),
             BotCommand("id", "показать Telegram ID"),
+            BotCommand("roll", "бросить кубик"),
             BotCommand("admin", "админ-панель"),
             BotCommand("pending", "новые анкеты"),
             BotCommand("accepted", "принятые участники"),
@@ -633,6 +729,7 @@ def build_application(config: Config, pool: asyncpg.Pool) -> Application:
     app.bot_data["pool"] = pool
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("id", id_command))
+    app.add_handler(CommandHandler("roll", roll_command))
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("pending", pending_command))
     app.add_handler(CommandHandler("accepted", accepted_command))
