@@ -243,13 +243,7 @@ def _parse_roll(raw: str) -> tuple[int, int]:
     return count, sides
 
 
-async def roll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    user = update.effective_user
-    if message is None or user is None:
-        return
-
-    args = list(context.args or [])
+async def _send_roll_result(message, user, args: list[str]) -> None:
     expression = "d20"
     comment = ""
 
@@ -260,10 +254,11 @@ async def roll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if expression.lower() in {"help", "помощь"}:
         await message.reply_text(
             "🎲 <b>ролл</b>\n\n"
-            "<code>/roll</code> — d20\n"
-            "<code>/roll d100</code> — один d100\n"
-            "<code>/roll 2d6</code> — два d6\n"
-            "<code>/roll d20 скрытность</code> — бросок с подписью",
+            "<code>Ролл</code> — d20\n"
+            "<code>Ролл d100</code> — один d100\n"
+            "<code>Ролл 2d6</code> — два d6\n"
+            "<code>Ролл d20 скрытность</code> — бросок с подписью\n\n"
+            "старый формат <code>/roll</code> тоже работает.",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -273,7 +268,7 @@ async def roll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except ValueError as exc:
         await message.reply_text(
             f"🎲 {escape(str(exc))}\n\n"
-            "пример: <code>/roll 2d6 атака</code>",
+            "пример: <code>Ролл 2d6 атака</code>",
             parse_mode=ParseMode.HTML,
         )
         return
@@ -304,6 +299,37 @@ async def roll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         parse_mode=ParseMode.HTML,
         disable_web_page_preview=True,
     )
+
+
+async def roll_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    user = update.effective_user
+    if message is None or user is None:
+        return
+    await _send_roll_result(message, user, list(context.args or []))
+
+
+async def russian_roll_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    user = message.from_user if message is not None else None
+    if message is None or user is None or not message.text:
+        return
+
+    text = " ".join(message.text.strip().split())
+    lowered = text.casefold()
+    if lowered not in {"ролл", "кубик"} and not lowered.startswith("ролл ") and not lowered.startswith("кубик "):
+        return
+
+    if int(user.id) in waiting_admin_actions:
+        return
+
+    prefix = "ролл" if lowered.startswith("ролл") else "кубик"
+    tail = text[len(prefix):].strip()
+    args = tail.split() if tail else []
+    await _send_roll_result(message, user, args)
+
+    from telegram.ext import ApplicationHandlerStop
+    raise ApplicationHandlerStop
 
 
 async def id_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -730,6 +756,7 @@ def build_application(config: Config, pool: asyncpg.Pool) -> Application:
     app.add_handler(CommandHandler("start", start_command))
     app.add_handler(CommandHandler("id", id_command))
     app.add_handler(CommandHandler("roll", roll_command))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, russian_roll_text_handler), group=-96)
     app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("pending", pending_command))
     app.add_handler(CommandHandler("accepted", accepted_command))
