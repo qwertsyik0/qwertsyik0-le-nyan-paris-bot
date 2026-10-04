@@ -925,9 +925,9 @@ def patch_scene_features(main_base_module: Any) -> None:
 
     def wrapped_build_application(config: Config, pool: asyncpg.Pool) -> Application:
         app = original_build_application(config, pool)
-        app.add_handler(CommandHandler("scene", scene_command), group=-101)
-        app.add_handler(CallbackQueryHandler(scene_callback_handler, pattern=r"^scene:"), group=-101)
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, scene_text_handler), group=-100)
+        app.add_handler(CommandHandler("scene", scene_command), group=-900)
+        app.add_handler(CallbackQueryHandler(scene_callback_handler, pattern=r"^scene:"), group=-900)
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, scene_text_handler), group=-900)
         return app
 
     main_base_module.build_application = wrapped_build_application
