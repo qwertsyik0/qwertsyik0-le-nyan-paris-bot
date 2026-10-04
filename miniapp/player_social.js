@@ -27,6 +27,14 @@
     dialogue: "разговор",
   };
 
+  const presenceStatuses = {
+    free: "свободен",
+    looking: "ищу игру",
+    in_scene: "в сцене",
+    afk: "афк",
+    dnd: "не беспокоить",
+  };
+
   const npcTypes = [
     "любой NPC","врач","солдат","жандарм","слуга","чиновник",
     "торговец","священник","горожанин","другой"
@@ -86,6 +94,7 @@
       screen.classList.toggle("active", screen.id === `tab-${name}`);
     });
     if (name === "game") {
+      loadPresence();
       loadCoplay();
       loadNpcMine();
     }
@@ -119,6 +128,39 @@
     section.id = "tab-game";
     section.className = "screen";
     section.innerHTML = `
+      <article class="card social-card presence-card">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">мой персонаж</p>
+            <h2>статус и локация</h2>
+          </div>
+          <button id="presence-refresh" type="button" class="small">обновить</button>
+        </div>
+
+        <div class="grid two">
+          <label>
+            <span>игровой статус</span>
+            <select id="presence-status">
+              ${Object.entries(presenceStatuses).map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            <span>текущая локация</span>
+            <select id="presence-location">
+              <option value="">не указана</option>
+              ${optionList(locations)}
+            </select>
+          </label>
+        </div>
+
+        <div class="social-actions presence-actions">
+          <button id="presence-save-status" type="button" class="small">сохранить статус</button>
+          <button id="presence-save-location" type="button" class="small">сохранить локацию</button>
+          <button id="presence-clear-location" type="button" class="small danger">покинуть локацию</button>
+        </div>
+        <div id="presence-message" class="message"></div>
+      </article>
+
       <article class="card social-card">
         <div class="section-head">
           <div>
@@ -197,10 +239,103 @@
     if (adminScreen) main.insertBefore(section, adminScreen);
     else main.appendChild(section);
 
+    document.getElementById("presence-refresh")?.addEventListener("click", loadPresence);
+    document.getElementById("presence-save-status")?.addEventListener("click", savePresenceStatus);
+    document.getElementById("presence-save-location")?.addEventListener("click", savePresenceLocation);
+    document.getElementById("presence-clear-location")?.addEventListener("click", clearPresenceLocation);
     document.getElementById("coplay-refresh")?.addEventListener("click", loadCoplay);
     document.getElementById("coplay-create")?.addEventListener("click", createCoplay);
     document.getElementById("npc-mine-refresh")?.addEventListener("click", loadNpcMine);
     document.getElementById("npc-create")?.addEventListener("click", createNpc);
+  }
+
+  async function loadPresence() {
+    if (!initData) return;
+    msg("presence-message", "загрузка...");
+    try {
+      const data = await post("/api/game/presence");
+      const status = document.getElementById("presence-status");
+      const locationSelect = document.getElementById("presence-location");
+
+      if (status) status.value = data.character_status || "free";
+
+      if (locationSelect) {
+        const current = data.current_location || "";
+        if (current && ![...locationSelect.options].some((option) => option.value === current)) {
+          const option = document.createElement("option");
+          option.value = current;
+          option.textContent = current;
+          locationSelect.appendChild(option);
+        }
+        locationSelect.value = current;
+      }
+
+      msg(
+        "presence-message",
+        `сейчас: ${data.character_status_label || "свободен"} · ${data.current_location || "локация не указана"}`
+      );
+    } catch (error) {
+      msg("presence-message", error.message, "error");
+    }
+  }
+
+  async function savePresenceStatus() {
+    const button = document.getElementById("presence-save-status");
+    if (button) button.disabled = true;
+    try {
+      const data = await post("/api/game/presence/status", {
+        status: document.getElementById("presence-status")?.value || "free",
+      });
+      tg?.HapticFeedback?.notificationOccurred?.("success");
+      msg(
+        "presence-message",
+        `статус сохранён: ${data.character_status_label || "—"}`,
+        "success"
+      );
+    } catch (error) {
+      msg("presence-message", error.message, "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function savePresenceLocation() {
+    const button = document.getElementById("presence-save-location");
+    const location = document.getElementById("presence-location")?.value || "";
+    if (!location) {
+      msg("presence-message", "выбери локацию", "error");
+      return;
+    }
+    if (button) button.disabled = true;
+    try {
+      const data = await post("/api/game/presence/location", {location});
+      tg?.HapticFeedback?.notificationOccurred?.("success");
+      msg(
+        "presence-message",
+        `локация сохранена: ${data.current_location || "—"}`,
+        "success"
+      );
+    } catch (error) {
+      msg("presence-message", error.message, "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
+  }
+
+  async function clearPresenceLocation() {
+    const button = document.getElementById("presence-clear-location");
+    if (button) button.disabled = true;
+    try {
+      await post("/api/game/presence/location/clear");
+      const select = document.getElementById("presence-location");
+      if (select) select.value = "";
+      tg?.HapticFeedback?.notificationOccurred?.("success");
+      msg("presence-message", "локация очищена", "success");
+    } catch (error) {
+      msg("presence-message", error.message, "error");
+    } finally {
+      if (button) button.disabled = false;
+    }
   }
 
   async function loadCoplay() {
