@@ -269,7 +269,7 @@ async def russian_presence_handler(update: Update, context: ContextTypes.DEFAULT
     lowered = text.casefold()
 
     recognized = (
-        lowered in {"статус", "мой статус", "моя локация", "локация", "покинуть локацию"}
+        lowered in {"статус", "мой статус", "моя локация", "локация", "покинуть локацию", "команды"}
         or lowered.startswith("статус ")
         or lowered.startswith("локация ")
     )
@@ -284,6 +284,21 @@ async def russian_presence_handler(update: Update, context: ContextTypes.DEFAULT
             return
     except Exception:
         pass
+
+    if lowered == "команды":
+        await message.reply_text(
+            "📚 <b>команды участников</b>\n\n"
+            "<code>Профиль</code> — мой профиль; ответом на сообщение — профиль этого игрока\n"
+            "<code>Мой профиль</code> — всегда мой профиль\n"
+            "<code>Статус</code> — посмотреть игровой статус\n"
+            "<code>Статус свободен</code> / <code>Статус ищу игру</code> / <code>Статус в сцене</code> / <code>Статус афк</code> / <code>Статус не беспокоить</code>\n"
+            "<code>Моя локация</code> — посмотреть локацию\n"
+            "<code>Локация дворец</code> — изменить локацию\n"
+            "<code>Покинуть локацию</code> — очистить локацию\n"
+            "<code>Ролл</code> / <code>Ролл d100</code> / <code>Ролл 2d6</code> — бросок кубика",
+            parse_mode=ParseMode.HTML,
+        )
+        raise ApplicationHandlerStop
 
     pool: asyncpg.Pool = context.application.bot_data["pool"]
     await upsert_user(pool, user.to_dict())
