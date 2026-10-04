@@ -225,7 +225,6 @@ async def set_commands_with_public_profiles(app: Application) -> None:
         BotCommand("myapp", "моя анкета"),
         BotCommand("invite", "ссылка на чат для принятых"),
         BotCommand("id", "показать Telegram ID"),
-        BotCommand("roll", "бросить кубик"),
         BotCommand("ping", "проверка бота в группе"),
         BotCommand("activity", "активность игроков"),
         BotCommand("active", "активность игроков"),
