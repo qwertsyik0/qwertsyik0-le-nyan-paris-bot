@@ -18,6 +18,7 @@ from telegram.ext import (
 from .config import Config
 from .db import find_user_by_identifier, upsert_user
 from .player_features import PLAYER_STATUS_LABELS, ensure_schema, name, role, tags, value
+from .presence_features import CHARACTER_STATUSES, ensure_presence_schema
 
 PROFILE_PREFIX = "профиль"
 
@@ -76,6 +77,7 @@ def _clean_target(raw: str | None) -> str:
 
 async def _fetch_public_application(pool: asyncpg.Pool, telegram_id: int) -> asyncpg.Record | None:
     await ensure_schema(pool)
+    await ensure_presence_schema(pool)
     return await pool.fetchrow(
         """
         SELECT
@@ -123,6 +125,8 @@ def public_profile_text(row: Any | None, fallback_user: User | None = None) -> s
         )
 
     player_status = str(value(row, "player_status", "active") or "active")
+    character_status = str(value(row, "character_status", "free") or "free")
+    current_location = str(value(row, "current_location", "") or "")
     row_tags = tags(value(row, "story_tags"))
     tag_line = ", ".join(row_tags) if row_tags else "—"
 
@@ -134,20 +138,35 @@ def public_profile_text(row: Any | None, fallback_user: User | None = None) -> s
         f"<b>роль:</b> {escape(role(row))}\n"
         f"<b>раздел:</b> {escape(str(value(row, 'affiliation', '—') or '—'))}\n"
         f"<b>статус:</b> {escape(PLAYER_STATUS_LABELS.get(player_status, player_status))}\n"
+        f"<b>игровой статус:</b> {escape(CHARACTER_STATUSES.get(character_status, character_status))}\n"
+        f"<b>локация:</b> {escape(current_location or 'не указана')}\n"
         f"<b>метки:</b> {escape(tag_line)}\n\n"
         "<i>это публичная карточка. полная анкета остается доступна только в личном кабинете.</i>"
     )
 
 
-async def _send_public_profile(update: Update, context: ContextTypes.DEFAULT_TYPE, target_raw: str | None = None) -> None:
+async def _send_public_profile(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    target_raw: str | None = None,
+    *,
+    force_self: bool = False,
+) -> None:
     pool: asyncpg.Pool = context.application.bot_data["pool"]
     message = update.effective_message
-    own_user = update.effective_user
     if message is None:
         return
 
-    reply_user = message.reply_to_message.from_user if message.reply_to_message is not None else None
-    target_id, fallback_user = await _resolve_target_id(pool, target_raw, reply_user, own_user)
+    own_user = message.from_user
+    if force_self:
+        if own_user is None:
+            await message.reply_text("не удалось определить пользователя.")
+            return
+        await upsert_user(pool, own_user.to_dict())
+        target_id, fallback_user = int(own_user.id), own_user
+    else:
+        reply_user = message.reply_to_message.from_user if message.reply_to_message is not None else None
+        target_id, fallback_user = await _resolve_target_id(pool, target_raw, reply_user, own_user)
     if target_id is None:
         await message.reply_text("игрок не найден в базе. попробуй ответом на его сообщение или через @username.")
         return
@@ -167,13 +186,24 @@ async def russian_profile_text_handler(update: Update, context: ContextTypes.DEF
     if message is None or not message.text:
         return
 
-    text = message.text.strip()
+    text = " ".join(message.text.strip().split())
     lowered = text.casefold()
+
+    if lowered == "мой профиль":
+        await _send_public_profile(update, context, force_self=True)
+        raise ApplicationHandlerStop
+
     if lowered != PROFILE_PREFIX and not lowered.startswith(PROFILE_PREFIX + " "):
         return
 
     target_raw = text[len(PROFILE_PREFIX):].strip()
-    await _send_public_profile(update, context, target_raw)
+
+    # "Профиль" без аргумента и без reply всегда означает профиль автора
+    # сообщения. Это исключает случайную подстановку чужого профиля.
+    if not target_raw and message.reply_to_message is None:
+        await _send_public_profile(update, context, force_self=True)
+    else:
+        await _send_public_profile(update, context, target_raw)
     raise ApplicationHandlerStop
 
 
