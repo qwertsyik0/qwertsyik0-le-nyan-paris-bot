@@ -73,6 +73,9 @@ def _clean(value: Any, limit: int, required: bool = False) -> str:
 async def ensure_social_schema(pool: asyncpg.Pool) -> None:
     async with pool.acquire() as conn:
         await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS player_status TEXT NOT NULL DEFAULT 'active';")
+        await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS character_status TEXT NOT NULL DEFAULT 'free';")
+        await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS current_location TEXT NOT NULL DEFAULT '';")
+        await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS presence_updated_at TIMESTAMPTZ;")
         await conn.execute(
             """
             CREATE TABLE IF NOT EXISTS paris_coplay_requests (
@@ -276,6 +279,14 @@ async def coplay_create(request: Request):
         scene_type,
         note,
     )
+    await pool.execute(
+        """
+        UPDATE paris_applications
+        SET character_status = 'looking', presence_updated_at = NOW(), updated_at = NOW()
+        WHERE telegram_id = $1;
+        """,
+        telegram_id,
+    )
     return {"ok": True, "request_id": int(row["id"])}
 
 
@@ -370,6 +381,16 @@ async def coplay_close(request: Request):
     )
     if row is None:
         raise HTTPException(status_code=404, detail="активный поиск не найден")
+    await pool.execute(
+        """
+        UPDATE paris_applications
+        SET character_status = CASE WHEN character_status = 'looking' THEN 'free' ELSE character_status END,
+            presence_updated_at = NOW(),
+            updated_at = NOW()
+        WHERE telegram_id = $1;
+        """,
+        telegram_id,
+    )
     return {"ok": True}
 
 
