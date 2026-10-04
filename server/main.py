@@ -12,6 +12,7 @@ from .main_base import app
 from .player_features import patch_player_features, router as player_features_router
 from .presence_features import patch_presence_features, router as presence_features_router
 from .public_profile_ext import patch_public_profile_features
+from .scene_features import patch_scene_features
 from .social_features import router as social_features_router
 from .warnings_ext import patch_warning_features, router as warnings_ext_router
 
@@ -20,6 +21,7 @@ patch_player_features(_main_base)
 patch_warning_features(_main_base)
 patch_banned_access(_main_base)
 patch_activity_features(_main_base)
+patch_scene_features(_main_base)
 patch_presence_features(_main_base)
 patch_public_profile_features(_main_base)
 patch_brand_features(_main_base)
