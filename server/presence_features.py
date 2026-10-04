@@ -294,8 +294,7 @@ async def russian_presence_handler(update: Update, context: ContextTypes.DEFAULT
             "<code>Статус свободен</code> / <code>Статус ищу игру</code> / <code>Статус в сцене</code> / <code>Статус афк</code> / <code>Статус не беспокоить</code>\n"
             "<code>Моя локация</code> — посмотреть локацию\n"
             "<code>Локация дворец</code> — изменить локацию\n"
-            "<code>Покинуть локацию</code> — очистить локацию\n"
-            "<code>Ролл</code> / <code>Ролл d100</code> / <code>Ролл 2d6</code> — бросок кубика",
+            "<code>Покинуть локацию</code> — очистить локацию",
             parse_mode=ParseMode.HTML,
         )
         raise ApplicationHandlerStop
