@@ -203,6 +203,15 @@ async def lifespan(app: FastAPI):
 
     telegram_app = build_application(config, pool)
     await telegram_app.initialize()
+    try:
+        bot_me = await telegram_app.bot.get_me()
+        print(
+            "telegram bot diagnostics: "
+            f"username=@{bot_me.username or ''} "
+            f"can_read_all_group_messages={getattr(bot_me, 'can_read_all_group_messages', None)}"
+        )
+    except Exception as exc:
+        print(f"telegram bot diagnostics failed: {exc}")
     await set_bot_commands(telegram_app)
     await configure_menu_button(telegram_app, config)
     await telegram_app.start()
