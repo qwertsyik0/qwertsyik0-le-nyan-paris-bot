@@ -21,8 +21,6 @@ from .db import get_user_application, upsert_user
 from .main_base import _row_value
 from .presence_features import ensure_presence_schema
 
-scene_drafts: dict[int, dict[str, Any]] = {}
-
 
 async def ensure_scene_schema(pool: asyncpg.Pool) -> None:
     await ensure_presence_schema(pool)
@@ -85,6 +83,23 @@ async def ensure_scene_schema(pool: asyncpg.Pool) -> None:
             """
             CREATE INDEX IF NOT EXISTS paris_scene_members_user_active_idx
             ON paris_scene_members (telegram_id, is_active);
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS paris_scene_drafts (
+                telegram_id BIGINT PRIMARY KEY REFERENCES paris_users(telegram_id) ON DELETE CASCADE,
+                chat_id BIGINT NOT NULL,
+                step TEXT NOT NULL DEFAULT 'title'
+                    CHECK (step IN ('title', 'location', 'mode', 'description')),
+                title TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL DEFAULT '',
+                access_mode TEXT NOT NULL DEFAULT 'open'
+                    CHECK (access_mode IN ('open', 'closed')),
+                description TEXT NOT NULL DEFAULT '',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
             """
         )
 
@@ -324,11 +339,27 @@ async def _send_scene_menu(message) -> None:
     )
 
 
-async def _start_draft(message, user_id: int) -> None:
+async def _start_draft(message, user_id: int, pool: asyncpg.Pool) -> None:
     if getattr(message.chat, "type", None) not in {"group", "supergroup"}:
         await message.reply_text("создавать сцену нужно в основной группе.")
         return
-    scene_drafts[user_id] = {"step": "title", "chat_id": int(message.chat_id)}
+    await ensure_scene_schema(pool)
+    await pool.execute(
+        """
+        INSERT INTO paris_scene_drafts (telegram_id, chat_id, step, title, location, access_mode, description)
+        VALUES ($1, $2, 'title', '', '', 'open', '')
+        ON CONFLICT (telegram_id) DO UPDATE SET
+            chat_id = EXCLUDED.chat_id,
+            step = 'title',
+            title = '',
+            location = '',
+            access_mode = 'open',
+            description = '',
+            updated_at = NOW();
+        """,
+        user_id,
+        int(message.chat_id),
+    )
     await message.reply_text(
         "🎭 <b>создание сцены</b>\n\n"
         "1/4 · напиши название сцены.\n\n"
@@ -346,7 +377,7 @@ async def _finish_draft(update: Update, context: ContextTypes.DEFAULT_TYPE, draf
 
     current = await _active_scene_for_user(pool, int(user.id))
     if current is not None:
-        scene_drafts.pop(int(user.id), None)
+        await pool.execute("DELETE FROM paris_scene_drafts WHERE telegram_id = $1;", int(user.id))
         await message.reply_text(f"ты уже участвуешь в сцене #{int(current['id'])}. сначала выйди или закрой её.")
         return
 
@@ -394,7 +425,7 @@ async def _finish_draft(update: Update, context: ContextTypes.DEFAULT_TYPE, draf
         scene_id,
         int(card.message_id),
     )
-    scene_drafts.pop(int(user.id), None)
+    await pool.execute("DELETE FROM paris_scene_drafts WHERE telegram_id = $1;", int(user.id))
 
     if str(row["access_mode"]) == "closed":
         await message.reply_text(
@@ -415,22 +446,33 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = int(user.id)
     pool: asyncpg.Pool = context.application.bot_data["pool"]
 
-    draft = scene_drafts.get(user_id)
+    await ensure_scene_schema(pool)
+    draft = await pool.fetchrow(
+        "SELECT * FROM paris_scene_drafts WHERE telegram_id = $1;",
+        user_id,
+    )
     if draft is not None:
-        if int(draft.get("chat_id") or message.chat_id) != int(message.chat_id):
+        if int(draft["chat_id"]) != int(message.chat_id):
             return
         if lowered == "отмена сцены":
-            scene_drafts.pop(user_id, None)
+            await pool.execute("DELETE FROM paris_scene_drafts WHERE telegram_id = $1;", user_id)
             await message.reply_text("создание сцены отменено.")
             raise ApplicationHandlerStop
 
-        step = draft.get("step")
+        step = str(draft["step"])
         if step == "title":
             if len(text) > 100:
                 await message.reply_text("название слишком длинное. максимум 100 символов.")
                 raise ApplicationHandlerStop
-            draft["title"] = text
-            draft["step"] = "location"
+            await pool.execute(
+                """
+                UPDATE paris_scene_drafts
+                SET title = $2, step = 'location', updated_at = NOW()
+                WHERE telegram_id = $1;
+                """,
+                user_id,
+                text,
+            )
             await message.reply_text(
                 "2/4 · где проходит сцена?\n\nнапример: <code>дворец</code>, <code>больница</code>, "
                 "<code>улицы Парижа</code> или своя локация.",
@@ -442,8 +484,15 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if len(text) > 80:
                 await message.reply_text("локация слишком длинная. максимум 80 символов.")
                 raise ApplicationHandlerStop
-            draft["location"] = text
-            draft["step"] = "mode"
+            await pool.execute(
+                """
+                UPDATE paris_scene_drafts
+                SET location = $2, step = 'mode', updated_at = NOW()
+                WHERE telegram_id = $1;
+                """,
+                user_id,
+                text,
+            )
             await message.reply_text(
                 "3/4 · сцена будет <b>открытая</b> или <b>закрытая</b>?\n\n"
                 "напиши: <code>Открытая</code> или <code>Закрытая</code>.",
@@ -455,8 +504,16 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if lowered not in {"открытая", "открытый", "open", "закрытая", "закрытый", "closed"}:
                 await message.reply_text("напиши только: <code>Открытая</code> или <code>Закрытая</code>.", parse_mode=ParseMode.HTML)
                 raise ApplicationHandlerStop
-            draft["access_mode"] = "open" if lowered in {"открытая", "открытый", "open"} else "closed"
-            draft["step"] = "description"
+            access_mode = "open" if lowered in {"открытая", "открытый", "open"} else "closed"
+            await pool.execute(
+                """
+                UPDATE paris_scene_drafts
+                SET access_mode = $2, step = 'description', updated_at = NOW()
+                WHERE telegram_id = $1;
+                """,
+                user_id,
+                access_mode,
+            )
             await message.reply_text(
                 "4/4 · коротко опиши, что происходит в сцене.\n\n"
                 "до 700 символов.",
@@ -468,8 +525,23 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if len(text) > 700:
                 await message.reply_text("описание слишком длинное. максимум 700 символов.")
                 raise ApplicationHandlerStop
-            draft["description"] = text
-            await _finish_draft(update, context, draft)
+            await pool.execute(
+                """
+                UPDATE paris_scene_drafts
+                SET description = $2, updated_at = NOW()
+                WHERE telegram_id = $1;
+                """,
+                user_id,
+                text,
+            )
+            final_draft = await pool.fetchrow(
+                "SELECT * FROM paris_scene_drafts WHERE telegram_id = $1;",
+                user_id,
+            )
+            if final_draft is None:
+                await message.reply_text("черновик сцены потерян. напиши <code>Создать сцену</code> ещё раз.", parse_mode=ParseMode.HTML)
+                raise ApplicationHandlerStop
+            await _finish_draft(update, context, final_draft)
             raise ApplicationHandlerStop
 
     commands = {
@@ -507,7 +579,7 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if current is not None:
             await message.reply_text(f"ты уже участвуешь в сцене #{int(current['id'])}.")
         else:
-            await _start_draft(message, user_id)
+            await _start_draft(message, user_id, pool)
         raise ApplicationHandlerStop
 
     if lowered == "моя сцена":
@@ -704,7 +776,7 @@ async def scene_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer(f"ты уже в сцене #{int(current['id'])}", show_alert=True)
         else:
             await query.answer()
-            await _start_draft(query.message, user_id)
+            await _start_draft(query.message, user_id, pool)
         raise ApplicationHandlerStop
 
     if action == "mine":
