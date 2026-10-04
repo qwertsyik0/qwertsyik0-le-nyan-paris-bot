@@ -178,16 +178,25 @@ async def _scene_text(pool: asyncpg.Pool, scene: Any) -> str:
 async def _scene_markup(pool: asyncpg.Pool, scene: Any, viewer_id: int | None = None) -> InlineKeyboardMarkup:
     buttons: list[list[InlineKeyboardButton]] = []
     scene_id = int(scene["id"])
-    if str(scene["status"]) == "active" and str(scene["access_mode"]) == "open":
+    is_creator = viewer_id is not None and int(_row_value(scene, "creator_id")) == int(viewer_id)
+    is_member = False
+    if viewer_id is not None:
+        is_member = bool(await pool.fetchval(
+            "SELECT EXISTS(SELECT 1 FROM paris_scene_members WHERE scene_id = $1 AND telegram_id = $2 AND is_active = TRUE);",
+            scene_id,
+            int(viewer_id),
+        ))
+
+    if str(scene["status"]) == "active" and str(scene["access_mode"]) == "open" and not is_member:
         buttons.append([InlineKeyboardButton("присоединиться", callback_data=f"scene:join:{scene_id}")])
 
     link = _message_link(_row_value(scene, "origin_chat_id"), _row_value(scene, "origin_message_id"))
     if link:
         buttons.append([InlineKeyboardButton("перейти к сцене", url=link)])
 
-    if viewer_id is not None and int(_row_value(scene, "creator_id")) == int(viewer_id):
+    if is_creator:
         buttons.append([InlineKeyboardButton("закрыть сцену", callback_data=f"scene:close:{scene_id}")])
-    elif viewer_id is not None:
+    elif viewer_id is not None and is_member:
         buttons.append([InlineKeyboardButton("покинуть сцену", callback_data=f"scene:leave:{scene_id}")])
 
     return InlineKeyboardMarkup(buttons)
@@ -316,7 +325,10 @@ async def _send_scene_menu(message) -> None:
 
 
 async def _start_draft(message, user_id: int) -> None:
-    scene_drafts[user_id] = {"step": "title"}
+    if getattr(message.chat, "type", None) not in {"group", "supergroup"}:
+        await message.reply_text("создавать сцену нужно в основной группе.")
+        return
+    scene_drafts[user_id] = {"step": "title", "chat_id": int(message.chat_id)}
     await message.reply_text(
         "🎭 <b>создание сцены</b>\n\n"
         "1/4 · напиши название сцены.\n\n"
@@ -405,6 +417,8 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     draft = scene_drafts.get(user_id)
     if draft is not None:
+        if int(draft.get("chat_id") or message.chat_id) != int(message.chat_id):
+            return
         if lowered == "отмена сцены":
             scene_drafts.pop(user_id, None)
             await message.reply_text("создание сцены отменено.")
@@ -753,7 +767,17 @@ async def scene_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
     if action in {"accept", "decline"}:
         invite = await pool.fetchrow(
             """
-            SELECT i.*, s.*
+            SELECT
+                i.scene_id,
+                i.target_id,
+                i.status AS invite_status,
+                s.status AS scene_status,
+                s.creator_id,
+                s.title,
+                s.location,
+                s.access_mode,
+                s.origin_chat_id,
+                s.origin_message_id
             FROM paris_scene_invites i
             JOIN paris_scenes s ON s.id = i.scene_id
             WHERE i.scene_id = $1 AND i.target_id = $2;
@@ -761,7 +785,7 @@ async def scene_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             scene_id,
             user_id,
         )
-        if invite is None or str(invite["status"]) != "pending":
+        if invite is None or str(invite["invite_status"]) != "pending" or str(invite["scene_status"]) != "active":
             await query.answer("приглашение уже неактивно", show_alert=True)
             raise ApplicationHandlerStop
 
