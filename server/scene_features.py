@@ -510,7 +510,7 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
             await _start_draft(message, user_id)
         raise ApplicationHandlerStop
 
-    if lowered in {"моя сцена", "мои сцены"}:
+    if lowered == "моя сцена":
         scene = await _active_scene_for_user(pool, user_id)
         if scene is None:
             await message.reply_text("сейчас у тебя нет активной сцены.")
@@ -521,6 +521,30 @@ async def scene_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 reply_markup=await _scene_markup(pool, scene, user_id),
                 disable_web_page_preview=True,
             )
+        raise ApplicationHandlerStop
+
+    if lowered == "мои сцены":
+        rows = await pool.fetch(
+            """
+            SELECT DISTINCT s.*
+            FROM paris_scenes s
+            JOIN paris_scene_members m ON m.scene_id = s.id
+            WHERE m.telegram_id = $1
+            ORDER BY s.updated_at DESC
+            LIMIT 8;
+            """,
+            user_id,
+        )
+        if not rows:
+            await message.reply_text("у тебя ещё не было сцен.")
+        else:
+            for scene in rows:
+                await message.reply_text(
+                    await _scene_text(pool, scene),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=await _scene_markup(pool, scene, user_id),
+                    disable_web_page_preview=True,
+                )
         raise ApplicationHandlerStop
 
     if lowered == "открытые сцены":
