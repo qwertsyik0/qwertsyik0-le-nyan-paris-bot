@@ -64,6 +64,8 @@ def app_payload(row: Any | None) -> dict[str, Any] | None:
         "status": _row_value(row, "status"),
         "player_status": status,
         "player_status_label": PLAYER_STATUS_LABELS.get(status, status),
+        "character_status": _row_value(row, "character_status", "free") or "free",
+        "current_location": _row_value(row, "current_location", "") or "",
         "story_tags": tags(_row_value(row, "story_tags")),
         "character_name": name(row),
         "character_first_name": _row_value(row, "character_first_name"),
@@ -90,6 +92,9 @@ async def ensure_schema(pool: asyncpg.Pool) -> None:
         await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS player_status TEXT NOT NULL DEFAULT 'active';")
         await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS story_tags TEXT[] NOT NULL DEFAULT '{}'::TEXT[];")
         await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS last_invited_at TIMESTAMPTZ;")
+        await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS character_status TEXT NOT NULL DEFAULT 'free';")
+        await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS current_location TEXT NOT NULL DEFAULT '';")
+        await conn.execute("ALTER TABLE paris_applications ADD COLUMN IF NOT EXISTS presence_updated_at TIMESTAMPTZ;")
         await conn.execute("CREATE INDEX IF NOT EXISTS paris_applications_player_status_idx ON paris_applications (player_status);")
         await conn.execute("CREATE INDEX IF NOT EXISTS paris_applications_status_affiliation_idx ON paris_applications (status, affiliation);")
         await conn.execute(
@@ -313,6 +318,15 @@ def profile_text(row: Any | None, unread: int = 0) -> str:
     if row is None:
         return "👤 <b>мой профиль</b>\n\nанкета пока не найдена. откройте кабинет и подайте анкету."
     player_status = str(value(row, "player_status", "active") or "active")
+    character_status = str(value(row, "character_status", "free") or "free")
+    current_location = str(value(row, "current_location", "") or "")
+    character_status_labels = {
+        "free": "свободен",
+        "looking": "ищу игру",
+        "in_scene": "в сцене",
+        "afk": "афк",
+        "dnd": "не беспокоить",
+    }
     row_tags = tags(value(row, "story_tags"))
     return (
         "👤 <b>мой профиль L’Empire des Ombres</b>\n\n"
@@ -321,6 +335,8 @@ def profile_text(row: Any | None, unread: int = 0) -> str:
         f"<b>раздел:</b> {escape(str(value(row, 'affiliation', '—') or '—'))}\n"
         f"<b>статус:</b> {escape(str(value(row, 'status', '—')))}\n"
         f"<b>активность:</b> {escape(PLAYER_STATUS_LABELS.get(player_status, player_status))}\n"
+        f"<b>игровой статус:</b> {escape(character_status_labels.get(character_status, character_status))}\n"
+        f"<b>локация:</b> {escape(current_location or 'не указана')}\n"
         f"<b>письма:</b> {unread} непрочитанных\n\n"
         f"<b>возраст:</b> {escape(str(value(row, 'character_age', '—')))}\n"
         f"<b>пол:</b> {escape(str(value(row, 'character_gender', '—')))}\n"
