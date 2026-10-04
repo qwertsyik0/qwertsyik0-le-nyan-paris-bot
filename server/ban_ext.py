@@ -174,8 +174,8 @@ def patch_banned_access(main_base_module) -> None:
 
     def wrapped_build_application(config, pool):
         telegram_app = original_build_application(config, pool)
-        telegram_app.add_handler(CallbackQueryHandler(restricted_callback_handler), group=-100)
-        telegram_app.add_handler(MessageHandler(filters.ALL, restricted_message_handler), group=-100)
+        telegram_app.add_handler(CallbackQueryHandler(restricted_callback_handler), group=-1000)
+        telegram_app.add_handler(MessageHandler(filters.ALL, restricted_message_handler), group=-1000)
         return telegram_app
 
     main_base_module.build_application = wrapped_build_application
