@@ -122,12 +122,6 @@ async def ensure_underground_schema(pool: asyncpg.Pool) -> None:
             ON paris_underground_fights (status, updated_at DESC);
             """
         )
-        await conn.execute("ALTER TABLE paris_underground_fights ADD COLUMN IF NOT EXISTS challenger_hp INT NOT NULL DEFAULT 3;")
-        await conn.execute("ALTER TABLE paris_underground_fights ADD COLUMN IF NOT EXISTS opponent_hp INT NOT NULL DEFAULT 3;")
-        await conn.execute("ALTER TABLE paris_underground_fights ADD COLUMN IF NOT EXISTS round_no INT NOT NULL DEFAULT 1;")
-        await conn.execute("ALTER TABLE paris_underground_fights ADD COLUMN IF NOT EXISTS challenger_action TEXT;")
-        await conn.execute("ALTER TABLE paris_underground_fights ADD COLUMN IF NOT EXISTS opponent_action TEXT;")
-        await conn.execute("ALTER TABLE paris_underground_fights ADD COLUMN IF NOT EXISTS last_round_text TEXT NOT NULL DEFAULT '';")
 
 
 def _heat_for_profit(profit: int) -> int:
@@ -275,13 +269,15 @@ async def _notify_admins(context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
             pass
 
 
-def _main_markup(*, active_fight: bool = False) -> InlineKeyboardMarkup:
+def _main_markup(*, active_fight: bool = False, fight_id: int | None = None) -> InlineKeyboardMarkup:
     rows = [
         [InlineKeyboardButton("🎲 красное / чёрное", callback_data="ug:gamble")],
         [InlineKeyboardButton("🥊 подпольные бои", callback_data="ug:fights")],
         [InlineKeyboardButton("💰 кошелёк", callback_data="ug:wallet")],
     ]
-    if not active_fight:
+    if active_fight and fight_id is not None:
+        rows.append([InlineKeyboardButton("🏆 заявить победу", callback_data=f"ug:fight_claim:{fight_id}")])
+    else:
         rows.append([InlineKeyboardButton("🚪 уйти", callback_data="ug:leave")])
     return InlineKeyboardMarkup(rows)
 
@@ -314,14 +310,8 @@ def _color_markup(round_id: int) -> InlineKeyboardMarkup:
 def _fight_active_markup(fight_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
-            [
-                InlineKeyboardButton("⚔️ атака", callback_data=f"ug:fight_action:{fight_id}:attack"),
-                InlineKeyboardButton("🛡 защита", callback_data=f"ug:fight_action:{fight_id}:defend"),
-            ],
-            [
-                InlineKeyboardButton("🃏 уловка", callback_data=f"ug:fight_action:{fight_id}:trick"),
-                InlineKeyboardButton("🚪 отступить", callback_data=f"ug:fight_action:{fight_id}:retreat"),
-            ],
+            [InlineKeyboardButton("🏆 заявить победу", callback_data=f"ug:fight_claim:{fight_id}")],
+            [InlineKeyboardButton("← подполье", callback_data="ug:menu")],
         ]
     )
 
@@ -333,245 +323,6 @@ def _fight_claim_markup(fight_id: int) -> InlineKeyboardMarkup:
             InlineKeyboardButton("оспорить", callback_data=f"ug:fight_dispute:{fight_id}"),
         ]]
     )
-
-
-ACTION_LABELS = {
-    "attack": "атака",
-    "defend": "защита",
-    "trick": "уловка",
-    "retreat": "отступление",
-}
-
-STRONG_ROLE_WORDS = (
-    "моряк", "солдат", "военн", "гвард", "жандарм", "полиц",
-    "страж", "охран", "офицер", "боец", "кузнец", "наёмник", "наемник",
-)
-TRAINED_ROLE_WORDS = (
-    "тюрем", "курьер", "охотник", "рабоч", "кучер", "матрос",
-)
-
-
-def _combat_tier(row: Any | None) -> int:
-    if row is None:
-        return 0
-    text = " ".join(
-        str(_row_value(row, key, "") or "")
-        for key in ("assigned_role", "role_preference", "affiliation")
-    ).casefold()
-    if any(word in text for word in STRONG_ROLE_WORDS):
-        return 2
-    if any(word in text for word in TRAINED_ROLE_WORDS):
-        return 1
-    return 0
-
-
-def _combat_tier_label(tier: int) -> str:
-    return {2: "высокая", 1: "средняя", 0: "обычная"}.get(int(tier), "обычная")
-
-
-def _injury_penalty(hp: int) -> int:
-    if hp <= 1:
-        return 8
-    if hp == 2:
-        return 3
-    return 0
-
-
-def _action_bonus(action: str, other: str) -> int:
-    if action == "attack" and other == "trick":
-        return 18
-    if action == "trick" and other == "defend":
-        return 18
-    if action == "defend" and other == "attack":
-        return 18
-    return 0
-
-
-def _round_outcome(
-    action_a: str,
-    action_b: str,
-    *,
-    tier_a: int,
-    tier_b: int,
-    hp_a: int,
-    hp_b: int,
-) -> tuple[int, int, str]:
-    if action_a == "defend" and action_b == "defend":
-        return 0, 0, "оба уходят в защиту — никто не получает урон."
-
-    score_a = secrets.randbelow(100) + 1 + tier_a * 7 - _injury_penalty(hp_a) + _action_bonus(action_a, action_b)
-    score_b = secrets.randbelow(100) + 1 + tier_b * 7 - _injury_penalty(hp_b) + _action_bonus(action_b, action_a)
-
-    # Защита выигрывает эпизод без контрурона: её задача — пережить атаку.
-    if action_a == "defend" and score_a >= score_b:
-        return 0, 0, "первый участник успешно закрывается от действия соперника."
-    if action_b == "defend" and score_b >= score_a:
-        return 0, 0, "второй участник успешно закрывается от действия соперника."
-
-    diff = abs(score_a - score_b)
-    if score_a == score_b or diff <= 4:
-        if action_a == "attack" and action_b == "attack":
-            return 1, 1, "жёсткий размен: оба пропускают удар."
-        return 0, 0, "силы почти равны — раунд проходит без чистого попадания."
-
-    if score_a > score_b:
-        return 0, 1, "первый участник переигрывает соперника и наносит урон."
-    return 1, 0, "второй участник переигрывает соперника и наносит урон."
-
-
-async def _fight_status_text(pool: asyncpg.Pool, fight: Any) -> str:
-    challenger = await get_user_application(pool, int(fight["challenger_id"]))
-    opponent = await get_user_application(pool, int(fight["opponent_id"]))
-    c_tier = _combat_tier(challenger)
-    o_tier = _combat_tier(opponent)
-    last = str(_row_value(fight, "last_round_text", "") or "").strip()
-    last_block = f"\n\n<b>прошлый раунд:</b>\n{escape(last)}" if last else ""
-    return (
-        f"🥊 <b>подпольный бой #{int(fight['id'])}</b>\n\n"
-        f"<b>{escape(_character_name(challenger))}</b> — {escape(_role(challenger))}\n"
-        f"стойкость: <b>{int(_row_value(fight, 'challenger_hp', 3))}/3</b> · подготовка: {_combat_tier_label(c_tier)}\n\n"
-        f"<b>{escape(_character_name(opponent))}</b> — {escape(_role(opponent))}\n"
-        f"стойкость: <b>{int(_row_value(fight, 'opponent_hp', 3))}/3</b> · подготовка: {_combat_tier_label(o_tier)}\n\n"
-        f"раунд: <b>{int(_row_value(fight, 'round_no', 1))}</b>\n"
-        "выбери действие. твой выбор не показывается сопернику, пока он не сделает свой."
-        + last_block
-    )
-
-
-async def _submit_fight_action(
-    pool: asyncpg.Pool,
-    fight_id: int,
-    actor_id: int,
-    action: str,
-) -> dict[str, Any]:
-    if action not in ACTION_LABELS:
-        raise ValueError("неверное действие")
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            fight = await conn.fetchrow(
-                "SELECT * FROM paris_underground_fights WHERE id = $1 FOR UPDATE;",
-                fight_id,
-            )
-            if fight is None:
-                raise ValueError("бой не найден")
-            if str(fight["status"]) != "active":
-                raise ValueError("бой уже завершён")
-
-            challenger_id = int(fight["challenger_id"])
-            opponent_id = int(fight["opponent_id"])
-            if actor_id not in {challenger_id, opponent_id}:
-                raise PermissionError("ты не участвуешь в этом бою")
-
-            actor_is_challenger = actor_id == challenger_id
-            own_col = "challenger_action" if actor_is_challenger else "opponent_action"
-            other_col = "opponent_action" if actor_is_challenger else "challenger_action"
-
-            if _row_value(fight, own_col) is not None:
-                raise ValueError("действие на этот раунд уже выбрано")
-
-            other_id = opponent_id if actor_is_challenger else challenger_id
-
-            if action == "retreat":
-                await conn.execute(
-                    f"UPDATE paris_underground_fights SET {own_col} = $2, updated_at = NOW() WHERE id = $1;",
-                    fight_id,
-                    action,
-                )
-                return {"state": "retreat", "winner_id": other_id}
-
-            await conn.execute(
-                f"UPDATE paris_underground_fights SET {own_col} = $2, updated_at = NOW() WHERE id = $1;",
-                fight_id,
-                action,
-            )
-            fight = await conn.fetchrow(
-                "SELECT * FROM paris_underground_fights WHERE id = $1 FOR UPDATE;",
-                fight_id,
-            )
-            other_action = _row_value(fight, other_col)
-            if other_action is None:
-                return {"state": "waiting"}
-
-            action_c = str(fight["challenger_action"])
-            action_o = str(fight["opponent_action"])
-            hp_c = int(_row_value(fight, "challenger_hp", 3))
-            hp_o = int(_row_value(fight, "opponent_hp", 3))
-
-            challenger = await conn.fetchrow(
-                "SELECT * FROM paris_applications WHERE telegram_id = $1;",
-                challenger_id,
-            )
-            opponent = await conn.fetchrow(
-                "SELECT * FROM paris_applications WHERE telegram_id = $1;",
-                opponent_id,
-            )
-            tier_c = _combat_tier(challenger)
-            tier_o = _combat_tier(opponent)
-
-            damage_c, damage_o, summary = _round_outcome(
-                action_c,
-                action_o,
-                tier_a=tier_c,
-                tier_b=tier_o,
-                hp_a=hp_c,
-                hp_b=hp_o,
-            )
-            hp_c = max(0, hp_c - damage_c)
-            hp_o = max(0, hp_o - damage_o)
-            round_no = int(_row_value(fight, "round_no", 1))
-            last_text = (
-                f"раунд {round_no}: {ACTION_LABELS[action_c]} × {ACTION_LABELS[action_o]}. "
-                f"{summary} стойкость: {hp_c}/3 — {hp_o}/3."
-            )
-
-            if hp_c <= 0 or hp_o <= 0:
-                if hp_c <= 0 and hp_o <= 0:
-                    # В редком взаимном нокауте преимущество получает менее раненый до размена;
-                    # если и это равно — решает импульс с учётом подготовки.
-                    score_c = secrets.randbelow(100) + tier_c * 7
-                    score_o = secrets.randbelow(100) + tier_o * 7
-                    winner_id = challenger_id if score_c >= score_o else opponent_id
-                    last_text += " оба падают, но один успевает остаться в сознании."
-                else:
-                    winner_id = opponent_id if hp_c <= 0 else challenger_id
-
-                await conn.execute(
-                    """
-                    UPDATE paris_underground_fights
-                    SET challenger_hp = $2,
-                        opponent_hp = $3,
-                        challenger_action = NULL,
-                        opponent_action = NULL,
-                        last_round_text = $4,
-                        updated_at = NOW()
-                    WHERE id = $1;
-                    """,
-                    fight_id,
-                    hp_c,
-                    hp_o,
-                    last_text,
-                )
-                return {"state": "finished", "winner_id": winner_id, "last_text": last_text}
-
-            await conn.execute(
-                """
-                UPDATE paris_underground_fights
-                SET challenger_hp = $2,
-                    opponent_hp = $3,
-                    round_no = round_no + 1,
-                    challenger_action = NULL,
-                    opponent_action = NULL,
-                    last_round_text = $4,
-                    updated_at = NOW()
-                WHERE id = $1;
-                """,
-                fight_id,
-                hp_c,
-                hp_o,
-                last_text,
-            )
-            return {"state": "next", "last_text": last_text}
 
 
 async def _wallet_text(pool: asyncpg.Pool, telegram_id: int) -> str:
@@ -620,7 +371,10 @@ async def underground_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await message.reply_text(
         await _menu_text(pool, int(user.id)),
         parse_mode=ParseMode.HTML,
-        reply_markup=_main_markup(active_fight=fight is not None),
+        reply_markup=_main_markup(
+            active_fight=fight is not None,
+            fight_id=int(fight["id"]) if fight is not None else None,
+        ),
     )
     raise ApplicationHandlerStop
 
@@ -823,16 +577,7 @@ async def _accept_fight(pool: asyncpg.Pool, fight_id: int, actor_id: int) -> asy
             return await conn.fetchrow(
                 """
                 UPDATE paris_underground_fights
-                SET status = 'active',
-                    challenger_hp = 3,
-                    opponent_hp = 3,
-                    round_no = 1,
-                    challenger_action = NULL,
-                    opponent_action = NULL,
-                    last_round_text = '',
-                    winner_claim_id = NULL,
-                    disputed = FALSE,
-                    updated_at = NOW()
+                SET status = 'active', updated_at = NOW()
                 WHERE id = $1
                 RETURNING *;
                 """,
@@ -1017,7 +762,7 @@ async def underground_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             markup = None
         else:
-            markup = _main_markup(active_fight=False)
+            markup = _main_markup(active_fight=False, fight_id=None)
 
         await query.answer()
         await query.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=markup)
@@ -1039,7 +784,11 @@ async def underground_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer()
         if fight is not None:
             await query.message.edit_text(
-                await _fight_status_text(pool, fight),
+                "🥊 <b>подпольный бой</b>\n\n"
+                f"у тебя уже идёт бой <b>#{int(fight['id'])}</b>.\n"
+                f"ставка каждого: <b>{int(fight['stake'])} франков</b>.\n\n"
+                "победа определяется отыгрышем: учитывайте профессию, физическую форму, "
+                "ранения, окружение и уловки. бот не выбирает победителя случайно.",
                 parse_mode=ParseMode.HTML,
                 reply_markup=_fight_active_markup(int(fight["id"])),
             )
@@ -1050,85 +799,13 @@ async def underground_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 "<code>Бой 25</code>\n\n"
                 "доступные ставки: 5, 10, 25, 50 или 100 франков с каждого.\n"
                 "после принятия вызова обе ставки замораживаются, и уйти до завершения боя нельзя.\n\n"
-                "бой идёт по раундам: атака / защита / уловка / отступление. "
-                "у каждого 3 единицы стойкости. профессия и текущее состояние влияют на результат.",
+                "победа решается отыгрышем, а не рандомом.\n"
+                "если кнопка не отображается, можно написать <code>Победа</code>.",
                 parse_mode=ParseMode.HTML,
                 reply_markup=InlineKeyboardMarkup(
                     [[InlineKeyboardButton("← подполье", callback_data="ug:menu")]]
                 ),
             )
-        raise ApplicationHandlerStop
-
-    if action == "fight_action":
-        if len(parts) < 4:
-            await query.answer("неверное действие", show_alert=True)
-            raise ApplicationHandlerStop
-        try:
-            fight_id = int(parts[2])
-            chosen_action = parts[3]
-            result = await _submit_fight_action(pool, fight_id, uid, chosen_action)
-        except (ValueError, PermissionError) as exc:
-            await query.answer(str(exc), show_alert=True)
-            raise ApplicationHandlerStop
-
-        if result["state"] == "waiting":
-            await query.answer("действие принято. ждём соперника", show_alert=True)
-            raise ApplicationHandlerStop
-
-        if result["state"] == "retreat":
-            winner_id = int(result["winner_id"])
-            completed, winner_wallet, old_heat = await _complete_fight(pool, fight_id, winner_id)
-            winner_app = await get_user_application(pool, winner_id)
-            actor_app = await get_user_application(pool, uid)
-            await query.answer("ты отступил")
-            await query.message.edit_text(
-                f"🥊 <b>бой #{fight_id} завершён</b>\n\n"
-                f"{escape(_character_name(actor_app))} отступает.\n"
-                f"победитель: <b>{escape(_character_name(winner_app))}</b>\n"
-                f"банк: <b>{int(completed['stake']) * 2} франков</b>.",
-                parse_mode=ParseMode.HTML,
-            )
-            if int(winner_wallet["heat_level"]) > old_heat:
-                await _notify_admins(
-                    context,
-                    "👁 <b>подполье: заметный рост средств</b>\n\n"
-                    f"{escape(_character_name(winner_app))}: "
-                    f"чистый результат {int(winner_wallet['net_profit']):+d} франков.",
-                )
-            raise ApplicationHandlerStop
-
-        if result["state"] == "finished":
-            winner_id = int(result["winner_id"])
-            completed, winner_wallet, old_heat = await _complete_fight(pool, fight_id, winner_id)
-            winner_app = await get_user_application(pool, winner_id)
-            await query.answer("раунд завершил бой")
-            await query.message.edit_text(
-                f"🥊 <b>бой #{fight_id} завершён</b>\n\n"
-                f"{escape(str(result.get('last_text') or ''))}\n\n"
-                f"победитель: <b>{escape(_character_name(winner_app))}</b>\n"
-                f"банк: <b>{int(completed['stake']) * 2} франков</b>\n"
-                f"средства победителя: <b>{int(winner_wallet['balance'])} франков</b>.",
-                parse_mode=ParseMode.HTML,
-            )
-            if int(winner_wallet["heat_level"]) > old_heat:
-                await _notify_admins(
-                    context,
-                    "👁 <b>подполье: заметный рост средств</b>\n\n"
-                    f"{escape(_character_name(winner_app))}: "
-                    f"чистый результат {int(winner_wallet['net_profit']):+d} франков.",
-                )
-            raise ApplicationHandlerStop
-
-        fight = await pool.fetchrow(
-            "SELECT * FROM paris_underground_fights WHERE id = $1;",
-            fight_id,
-        )
-        await query.answer("раунд завершён", show_alert=False)
-        await query.message.edit_text(
-            await _fight_status_text(pool, fight),
-            parse_mode=ParseMode.HTML,
-            reply_markup=_fight_active_markup(fight_id),
-        )
         raise ApplicationHandlerStop
 
     if action in {"fight_accept", "fight_decline", "fight_claim", "fight_confirm", "fight_dispute"}:
@@ -1178,9 +855,14 @@ async def underground_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             challenger_app = await get_user_application(pool, int(active["challenger_id"]))
             opponent_app = await get_user_application(pool, int(active["opponent_id"]))
             await query.message.edit_text(
-                (await _fight_status_text(pool, active))
-                + f"\n\nбанк боя: <b>{int(active['stake']) * 2} франков</b>.\n"
-                "атака сильнее уловки, уловка сильнее защиты, защита лучше гасит атаку.",
+                f"🥊 <b>бой #{fight_id} начался</b>\n\n"
+                f"{escape(_character_name(challenger_app))} — {escape(_role(challenger_app))}\n"
+                f"{escape(_character_name(opponent_app))} — {escape(_role(opponent_app))}\n\n"
+                f"банк боя: <b>{int(active['stake']) * 2} франков</b>.\n"
+                "учитывайте профессию, силу, ранения, окружение и уловки. "
+                "автоматического победителя нет.\n\n"
+                "когда отыгрыш закончен, победитель нажимает «заявить победу», "
+                "а второй участник подтверждает результат.",
                 parse_mode=ParseMode.HTML,
                 reply_markup=_fight_active_markup(fight_id),
             )
@@ -1195,19 +877,6 @@ async def underground_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             raise ApplicationHandlerStop
 
         if action == "fight_claim":
-            await query.answer("бой теперь идёт по раундам", show_alert=True)
-            fresh = await pool.fetchrow(
-                "SELECT * FROM paris_underground_fights WHERE id = $1;",
-                fight_id,
-            )
-            await query.message.edit_text(
-                await _fight_status_text(pool, fresh),
-                parse_mode=ParseMode.HTML,
-                reply_markup=_fight_active_markup(fight_id),
-            )
-            raise ApplicationHandlerStop
-
-        if action == "fight_claim_legacy":
             claim = _row_value(fight, "winner_claim_id")
             if claim is not None and int(claim) != uid:
                 await query.answer("другой участник уже заявил победу — подтверди или оспорь", show_alert=True)
@@ -1299,9 +968,10 @@ async def underground_text_handler(update: Update, context: ContextTypes.DEFAULT
     is_menu = lowered == "подполье"
     is_wallet = lowered in {"кошелёк", "мой кошелёк"}
     is_fight = lowered == "бой" or lowered.startswith("бой ")
+    is_claim = lowered in {"победа", "заявить победу"}
     is_admin_resolution = bool(re.match(r"^бой\s*#?\d+\s+победитель\s+\S+$", lowered))
 
-    if not (is_menu or is_wallet or is_fight or is_admin_resolution):
+    if not (is_menu or is_wallet or is_fight or is_claim or is_admin_resolution):
         return
 
     pool: asyncpg.Pool = context.application.bot_data["pool"]
@@ -1345,6 +1015,33 @@ async def underground_text_handler(update: Update, context: ContextTypes.DEFAULT
         await message.reply_text("подполье доступно только принятым участникам.")
         raise ApplicationHandlerStop
 
+    if is_claim:
+        fight = await _active_fight(pool, int(user.id))
+        if fight is None:
+            await message.reply_text("у тебя сейчас нет активного подпольного боя.")
+            raise ApplicationHandlerStop
+        fight_id = int(fight["id"])
+        claim = _row_value(fight, "winner_claim_id")
+        if claim is not None and int(claim) != int(user.id):
+            await message.reply_text("другой участник уже заявил победу. открой «подполье → подпольные бои» и подтверди или оспорь результат.")
+            raise ApplicationHandlerStop
+        await pool.execute(
+            """
+            UPDATE paris_underground_fights
+            SET winner_claim_id = $2, updated_at = NOW()
+            WHERE id = $1 AND status = 'active';
+            """,
+            fight_id,
+            int(user.id),
+        )
+        await message.reply_text(
+            f"🥊 в бою <b>#{fight_id}</b> победа заявлена.\n"
+            "второй участник должен подтвердить или оспорить результат.",
+            parse_mode=ParseMode.HTML,
+            reply_markup=_fight_claim_markup(fight_id),
+        )
+        raise ApplicationHandlerStop
+
     if is_menu:
         fight = await _active_fight(pool, int(user.id))
         await message.reply_text(
@@ -1365,8 +1062,7 @@ async def underground_text_handler(update: Update, context: ContextTypes.DEFAULT
         await message.reply_text(
             "🥊 чтобы вызвать игрока на подпольный бой, ответь на его сообщение:\n"
             "<code>Бой 25</code>\n\n"
-            "ставка может быть 5, 10, 25, 50 или 100 франков.\n"
-            "после принятия бой идёт по раундам: атака / защита / уловка / отступление.",
+            "ставка может быть 5, 10, 25, 50 или 100 франков.",
             parse_mode=ParseMode.HTML,
         )
         raise ApplicationHandlerStop
@@ -1407,8 +1103,7 @@ async def underground_text_handler(update: Update, context: ContextTypes.DEFAULT
             f"{escape(_character_name(application))} вызывает "
             f"{escape(_character_name(target_app))}.\n"
             f"ставка: <b>{stake} франков с каждого</b>.\n\n"
-            "после принятия вызова уйти до завершения боя нельзя.\n"
-            "у каждого 3 единицы стойкости; после принятия выбирайте действия кнопками.",
+            "после принятия вызова уйти до завершения боя нельзя.",
             parse_mode=ParseMode.HTML,
             reply_markup=InlineKeyboardMarkup(
                 [[
