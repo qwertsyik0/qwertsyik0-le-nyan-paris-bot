@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#08060a">
   <meta name="description" content="Личный кабинет участника L’Empire des Ombres — Париж, 1808 год.">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="./styles.css?v=20261004-presence-11">
+  <link rel="stylesheet" href="./styles.css?v=20261006-rules-1">
 </head>
 <body>
   <div class="app-shell">
@@ -63,6 +63,21 @@
             <strong>указы, роли, газета</strong>
             <p>публичная страница события с основными сведениями.</p>
             <button type="button" class="small" data-open-link="citySheet">открыть</button>
+          </article>
+        </section>
+
+        <section class="grid two" data-home-rules-card="1">
+          <article class="card compact">
+            <span class="label">правила</span>
+            <strong>полный свод правил</strong>
+            <p>общение, ролеплей, боевые взаимодействия, сюжет, отыгрыш, персонажи и наказания.</p>
+            <button type="button" class="small" data-open-tab="guide">открыть правила</button>
+          </article>
+          <article class="card compact">
+            <span class="label">навигация</span>
+            <strong>правила по разделам</strong>
+            <p>на отдельной странице можно быстро переключаться между нужными категориями.</p>
+            <button type="button" class="small" data-open-tab="guide">перейти</button>
           </article>
         </section>
 
@@ -172,22 +187,10 @@
 
       <section id="tab-guide" class="screen">
         <article class="card">
-          <p class="eyebrow">основные правила</p>
-          <h2>как играть</h2>
-          <div class="info-list">
-            <div><b>без метагейма</b><span>персонаж знает только то, что видел, слышал или получил через сюжет.</span></div>
-            <div><b>без godmode</b><span>нельзя решать исход действий за чужого персонажа без согласования.</span></div>
-            <div><b>локации через темы</b><span>уход из одной темы сначала отыгрывается там, потом вход в другую.</span></div>
-            <div><b>серьезные действия</b><span>аресты, убийства, крупные улики и политические последствия согласуются с администрацией.</span></div>
-            <div><b>стиль эпохи</b><span>никаких современных ролей, знаний будущего и современной речи в документах.</span></div>
-          </div>
-        </article>
-
-        <article class="card">
-          <h3>полезные ссылки</h3>
-          <div class="link-grid">
-            <button type="button" class="ghost" data-open-link="citySheet">городской лист</button>
-          </div>
+          <p class="eyebrow">официальный свод</p>
+          <h2>правила</h2>
+          <p>полный свод правил открыт на отдельной странице mini app.</p>
+          <button type="button" class="primary wide" data-open-tab="guide">открыть правила</button>
         </article>
       </section>
 
@@ -259,10 +262,10 @@
     </main>
   </div>
 
-  <script src="./app.js?v=20261003-tabs-fix-2"></script>
+  <script src="./app.js?v=20261006-rules-1"></script>
   <script src="./features.js?v=20261003-tabs-fix-2"></script>
   <script src="./warnings.js?v=20261003-tabs-fix-2"></script>
-  <script src="./nav_menu.js?v=20261004-presence-11"></script>
+  <script src="./nav_menu.js?v=20261006-rules-1"></script>
   <script src="./admin_tabs.js?v=20261004-presence-11"></script>
   <script src="./admin_power.js?v=20261003-social-10"></script>
   <script src="./admin_redesign.js?v=20261003-social-10"></script>
