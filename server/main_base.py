@@ -230,6 +230,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="L’Empire des Ombres Bot", lifespan=lifespan)
+
+@app.middleware("http")
+async def miniapp_no_cache(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/miniapp"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://qwertsyik0.github.io"],
