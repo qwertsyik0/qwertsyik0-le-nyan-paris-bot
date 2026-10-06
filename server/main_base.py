@@ -242,7 +242,7 @@ async def miniapp_no_cache(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://qwertsyik0.github.io"],
+    allow_origins=["https://qwertsyik0.github.io", "https://le-nyan-paris-miniapp.onrender.com"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
