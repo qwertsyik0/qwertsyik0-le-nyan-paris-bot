@@ -7,6 +7,7 @@
   const filters = [...document.querySelectorAll("[data-rule-filter]")];
   const sections = [...document.querySelectorAll("[data-rule-section]")];
   const intro = document.querySelector(".rules-intro");
+  const mobileSelect = document.getElementById("rules-mobile-select");
 
   function goBack() {
     if (document.referrer && document.referrer.includes("/miniapp/")) {
@@ -46,13 +47,19 @@
     button.addEventListener("click", () => jumpTo(button.dataset.ruleFilter || "all"));
   });
 
+  mobileSelect?.addEventListener("change", () => {
+    jumpTo(mobileSelect.value || "all");
+  });
+
   const observer = new IntersectionObserver((entries) => {
     const visible = entries
       .filter((entry) => entry.isIntersecting)
       .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
 
     if (visible?.target?.dataset?.ruleSection) {
-      setActive(visible.target.dataset.ruleSection);
+      const name = visible.target.dataset.ruleSection;
+      setActive(name);
+      if (mobileSelect && mobileSelect.value !== name) mobileSelect.value = name;
     }
   }, {
     root: null,
