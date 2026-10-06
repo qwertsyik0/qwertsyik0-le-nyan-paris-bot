@@ -623,6 +623,7 @@ async def set_bot_commands(app: Application) -> None:
             BotCommand("letter", "отправить письмо игроку"),
             BotCommand("letters", "список писем"),
             BotCommand("letterstatus", "изменить статус письма"),
+            BotCommand("underground", "подполье"),
         ]
     )
 
