@@ -1214,7 +1214,7 @@ input[type="submit"] {
     padding:0 14px calc(26px + var(--bottom-safe));
   }
 
-  .topbar {
+  body:not(.rules-page) .topbar {
     min-height:68px;
     margin:0 -14px 8px;
     padding:13px 14px 10px;
@@ -1230,8 +1230,8 @@ input[type="submit"] {
     backdrop-filter:blur(14px);
   }
 
-  .topbar > div > .eyebrow,
-  .topbar > div > h1 {
+  body:not(.rules-page) .topbar > div > .eyebrow,
+  body:not(.rules-page) .topbar > div > h1 {
     display:none !important;
   }
 
@@ -1256,7 +1256,7 @@ input[type="submit"] {
     line-height:1;
   }
 
-  #connection-pill {
+  body:not(.rules-page) #connection-pill {
     padding:5px 7px;
     border:0;
     border-radius:6px;
