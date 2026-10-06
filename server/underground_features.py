@@ -663,7 +663,10 @@ async def underground_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.edit_text(
             await _menu_text(pool, uid),
             parse_mode=ParseMode.HTML,
-            reply_markup=_main_markup(active_fight=fight is not None),
+            reply_markup=_main_markup(
+                active_fight=fight is not None,
+                fight_id=int(fight["id"]) if fight is not None else None,
+            ),
         )
         raise ApplicationHandlerStop
 
@@ -1047,7 +1050,10 @@ async def underground_text_handler(update: Update, context: ContextTypes.DEFAULT
         await message.reply_text(
             await _menu_text(pool, int(user.id)),
             parse_mode=ParseMode.HTML,
-            reply_markup=_main_markup(active_fight=fight is not None),
+            reply_markup=_main_markup(
+                active_fight=fight is not None,
+                fight_id=int(fight["id"]) if fight is not None else None,
+            ),
         )
         raise ApplicationHandlerStop
 
