@@ -8,9 +8,7 @@
 
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
-  const API_BASE = location.hostname.includes("github.io")
-    ? "https://le-nyan-paris-bot.onrender.com"
-    : "";
+  const API_BASE = "https://le-nyan-paris-bot.onrender.com";
 
   const locations = [
     "дворец","суд и канцелярия","полиция","тюрьма","газета и слухи","рынок",
