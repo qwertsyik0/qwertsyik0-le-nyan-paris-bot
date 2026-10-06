@@ -25,7 +25,7 @@ waiting_admin_actions: dict[int, WaitingAction] = {}
 
 EVENT_CHAT_URL = "https://t.me/+gB1sMZBd5Lo4YjQy"
 CITY_SHEET_URL = "https://qwertsyik0.github.io/le-nyan-paris/"
-MINIAPP_CACHE_TAG = "empire-presence-20261004-11"
+MINIAPP_CACHE_TAG = "empire-rules-20261006-1"
 
 
 def mini_app_url(config: Config) -> str:
