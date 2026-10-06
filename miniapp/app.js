@@ -84,6 +84,10 @@ function assignedRole(application) {
 }
 
 function openTab(name) {
+  if (name === "guide") {
+    window.location.href = "./rules.html?v=20261006-rules-1";
+    return;
+  }
   document.querySelectorAll(".tab").forEach((button) => {
     button.classList.toggle("active", button.dataset.tab === name);
   });
