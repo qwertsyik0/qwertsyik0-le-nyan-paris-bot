@@ -8,7 +8,7 @@
   <meta name="description" content="полный свод правил L’Empire des Ombres.">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="stylesheet" href="./styles.css?v=20261006-rules-1">
-  <link rel="stylesheet" href="./rules.css?v=20261006-rules-mobile-2">
+  <link rel="stylesheet" href="./rules.css?v=20261006-rules-mobile-3">
 </head>
 <body class="rules-page">
   <div class="app-shell rules-shell">
@@ -37,6 +37,21 @@
       </article>
 
       <nav class="rules-filter-wrap" aria-label="разделы правил">
+        <label class="rules-mobile-select-label" for="rules-mobile-select">
+          <span>раздел</span>
+          <select id="rules-mobile-select" class="rules-mobile-select">
+            <option value="all">все правила</option>
+            <option value="general">1. общение и поведение</option>
+            <option value="roleplay">2. ролеплей</option>
+            <option value="combat">3. боевые взаимодействия</option>
+            <option value="plot">4. сюжет и информация</option>
+            <option value="play">5. отыгрыш</option>
+            <option value="characters">6. персонажи</option>
+            <option value="players">7. взаимодействие между игроками</option>
+            <option value="admin">8. администрация</option>
+            <option value="punishments">9. наказания</option>
+          </select>
+        </label>
         <div class="rules-filters" id="rules-filters">
           <button type="button" class="rules-filter active" data-rule-filter="all">все</button>
           <button type="button" class="rules-filter" data-rule-filter="general">общение</button>
@@ -264,6 +279,6 @@
     </main>
   </div>
 
-  <script src="./rules.js?v=20261006-rules-mobile-2"></script>
+  <script src="./rules.js?v=20261006-rules-mobile-3"></script>
 </body>
 </html>
