@@ -42,7 +42,8 @@ def group_start_text() -> str:
         "<code>Профиль</code> — карточка персонажа\n"
         "<code>/me</code> — карточка персонажа\n"
         "<code>/activity</code> — активность игроков для владельца\n"
-        "<code>/ping</code> — проверка связи"
+        "<code>/ping</code> — проверка связи\n"
+        "<code>Подполье</code> — подпольные игры и бои"
     )
 
 
