@@ -9,9 +9,7 @@
 
   const tg = window.Telegram?.WebApp;
   const initData = tg?.initData || "";
-  const API_BASE = location.hostname.includes("github.io")
-    ? "https://le-nyan-paris-bot.onrender.com"
-    : "";
+  const API_BASE = "https://le-nyan-paris-bot.onrender.com";
 
   function esc(value) {
     return String(value ?? "")
